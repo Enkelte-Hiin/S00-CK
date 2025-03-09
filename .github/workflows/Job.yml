@@ -2,8 +2,8 @@ name: Serv00 CF Cookie Crawler
 
 on:
   schedule:
-    - cron: '0 0 * * *'
-  workflow_dispatch:
+    - cron: '0 0 * * *'  # 每天执行一次
+  workflow_dispatch:  # 允许手动触发
 
 jobs:
   crawl:
@@ -34,72 +34,71 @@ jobs:
       run: |
         python - <<EOF
         import os
-        import time
-        from DrissionPage import ChromiumPage
+        from time import sleep
+        from DrissionPage import ChromiumPage, SessionOptions
         from pathlib import Path
 
         class Serv00Crawler:
             def __init__(self):
-                self.page = ChromiumPage(
-                    headless=True,
-                    no_imgs=True,
-                    download_media=False,
-                    driver_options={
-                        'arguments': [
-                            '--disable-blink-features=AutomationControlled',
-                            '--lang=en-US',
-                            '--disable-popup-blocking'
-                        ]
-                    }
-                )
+                # 设置浏览器选项
+                options = SessionOptions()
+                options.headless(True)  # 启用无头模式
+                options.set_argument('--disable-blink-features=AutomationControlled')
+                options.set_argument('--lang=en-US')
+                options.set_argument('--disable-popup-blocking')
+
+                # 初始化浏览器
+                self.page = ChromiumPage(session_options=options)
                 self.page.set.user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
-                
+
             def handle_cloudflare(self):
-                # 等待验证框架加载
+                """ 处理 Cloudflare 验证 """
                 if not self.page.wait.ele_loaded('iframe[src*="challenge"]', timeout=15):
                     return False
                 
-                # 切换到验证框架
+                # 切换到 Cloudflare 挑战 iframe
                 challenge_frame = self.page('iframe[src*="challenge"]')
                 self.page.switch_to.frame(challenge_frame)
-                
+
                 try:
-                    # 识别并点击验证按钮
+                    # 尝试点击验证按钮
                     verify_btn = self.page('#cf-stage')
                     verify_btn.click()
-                    print("点击验证按钮成功")
-                    
-                    # 等待主页面加载完成
+                    print("点击 Cloudflare 验证按钮成功")
+
+                    # 切换回主页面并等待加载完成
                     self.page.switch_to.main_frame()
                     self.page.wait.load_start()
-                    
-                    # 检测是否出现二次验证
+
+                    # 检测是否有额外的等待提示
                     if self.page('div#cf-please-wait', timeout=5).ele_exists():
                         print("检测到二次验证，等待完成...")
                         self.page('div#cf-please-wait').wait.disappear(timeout=180)
-                    
+
                     return True
                 except Exception as e:
-                    print(f"验证处理失败: {str(e)}")
+                    print(f"验证失败: {str(e)}")
                     return False
 
             def get_cookies(self):
+                """ 获取目标网站的 cookies """
                 try:
                     self.page.get(os.environ['SERV00_URL'])
-                    
-                    # 处理可能的跳转验证
+
+                    # 处理可能的 Cloudflare 验证
                     if "challenges" in self.page.url:
-                        print("检测到验证页面重定向")
+                        print("检测到 Cloudflare 验证")
                         if not self.handle_cloudflare():
-                            raise Exception("无法完成验证")
-                    
-                    # 等待目标页面加载
+                            raise Exception("无法完成 Cloudflare 验证")
+
+                    # 确保页面加载完成
                     self.page.wait.ele_loaded('input[name="username"]', timeout=30)
-                    
-                    # 保存cookies
+
+                    # 提取 cookies 并保存
                     cookies = self.page.cookies
                     cookie_str = '\n'.join([f"{c['name']}={c['value']}" for c in cookies])
                     Path('serv00_cookies.txt').write_text(cookie_str)
+
                     return True
                 finally:
                     self.page.quit()
@@ -107,9 +106,9 @@ jobs:
         if __name__ == '__main__':
             crawler = Serv00Crawler()
             if crawler.get_cookies():
-                print("Cookie获取成功")
+                print("Cookie 获取成功")
             else:
-                raise Exception("Cookie获取失败")
+                raise Exception("Cookie 获取失败")
         EOF
 
     - name: Upload cookies
