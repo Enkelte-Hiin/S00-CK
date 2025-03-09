@@ -77,7 +77,7 @@ def bypass_cloudflare():
         # 等待页面加载
         WebDriverWait(driver, 15).until(
             EC.presence_of_element_located((By.TAG_NAME, 'body'))
-        
+                    )
         # 保存截图
         screenshot_path = 'page_screenshot.png'
         driver.save_screenshot(screenshot_path)
