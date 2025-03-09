@@ -1,53 +1,56 @@
-name: Get Serv00 Cookies
+name: Serv00 Crawler
 
 on:
   push:
     branches:
       - main
+  schedule:
+    - cron: '0 */6 * * *'  # 每6小时运行一次
   workflow_dispatch:  # 允许手动触发
 
 jobs:
-  get-cookies:
+  crawl:
     runs-on: ubuntu-latest
 
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 设置 Python 环境
+      - name: 设置 Python 3.10
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
       - name: 安装依赖
         run: |
+          python -m pip install --upgrade pip
           pip install DrissionPage
 
-      - name: 运行 Serv00 爬虫获取 Cookies
+      - name: 运行爬虫获取 Cookie
         env:
           SERV00_URL: "https://www.serv00.com/offer/create_new_account"
         run: |
           python - <<EOF
           import os
           from time import sleep
-          from DrissionPage import ChromiumPage, SessionOptions
+          from DrissionPage import ChromiumOptions, ChromiumPage
           from pathlib import Path
 
           class Serv00Crawler:
               def __init__(self):
-                  options = SessionOptions()
-                  options.set_browser_argument('--headless=new')
-                  options.set_browser_argument('--disable-blink-features=AutomationControlled')
-                  options.set_browser_argument('--lang=en-US')
-                  options.set_browser_argument('--disable-popup-blocking')
+                  options = ChromiumOptions()
+                  options.set_argument('--headless=new')
+                  options.set_argument('--disable-blink-features=AutomationControlled')
+                  options.set_argument('--lang=en-US')
+                  options.set_argument('--disable-popup-blocking')
 
-                  self.page = ChromiumPage(session_options=options)
+                  self.page = ChromiumPage(options=options)
                   self.page.set_user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
 
               def handle_cloudflare(self):
                   if not self.page.wait.ele_loaded('iframe[src*="challenge"]', timeout=15):
                       return False
-                  
+
                   challenge_frame = self.page.ele('iframe[src*="challenge"]')
                   if challenge_frame:
                       self.page.frame.to_frame(challenge_frame)
@@ -98,7 +101,7 @@ jobs:
                   raise Exception("Cookie 获取失败")
           EOF
 
-      - name: 上传 Cookies 作为 Artifacts
+      - name: 上传 Cookie 作为 Artifact
         uses: actions/upload-artifact@v4
         with:
           name: serv00_cookies
