@@ -5,7 +5,7 @@ on:
 
 jobs:
   bypass:
-    runs-on: ubuntu-22.04  # 指定使用稳定版 Ubuntu 22.04
+    runs-on: ubuntu-22.04
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -17,10 +17,17 @@ jobs:
 
     - name: Install system dependencies
       run: |
-        sudo apt-get update
+        # 强制重置软件源配置
+        sudo rm -f /etc/apt/sources.list.d/*  # 清除第三方源
+        sudo add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu jammy main universe multiverse"  # 核心源
+        sudo add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu jammy-updates main universe multiverse"
+        sudo apt-get update -y
+        
+        # 安装必要依赖
         sudo apt-get install -y \
           xvfb \
-          libgl1-mesa-glx \  # Ubuntu 22.04 标准包名
+          libgl1-mesa-glx \
+          libxkbcommon0 \  # 新增关键依赖
           tesseract-ocr \
           tesseract-ocr-eng
 
