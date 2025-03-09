@@ -65,28 +65,56 @@ jobs:
                   # 检查是否为 Cloudflare/Turnstile 验证页面
                   if "verify you are human" in html_content or "cloudflare" in html_content or "cf-turnstile" in html_content:
                       print("检测到 Cloudflare/Turnstile 验证，开始处理...")
-                      sleep(10)  # 等待 Turnstile 加载
+                      sleep(20)  # 延长等待时间，确保 Turnstile 加载
 
-                      # 尝试定位 Turnstile 容器
-                      turnstile_container = self.page.ele("xpath://div[contains(@class, 'cf-turnstile')]", timeout=20)
+                      # 等待 Turnstile 元素出现
+                      turnstile_container = None
+                      for _ in range(3):  # 尝试 3 次
+                          turnstile_container = self.page.ele("xpath://div[contains(@class, 'cf-turnstile')]", timeout=20)
+                          if turnstile_container:
+                              break
+                          print("未找到 Turnstile 容器，等待重试...")
+                          sleep(10)
+
                       if not turnstile_container:
-                          print("未找到 Turnstile 容器，尝试备用选择器...")
-                          turnstile_container = self.page.ele("xpath://div[@id='uATa8']", timeout=20)
+                          print("未找到 Turnstile 容器，尝试检查 iframe...")
+                          turnstile_iframe = self.page.ele("xpath://iframe[contains(@src, 'challenges.cloudflare.com')]", timeout=20)
+                          if turnstile_iframe:
+                              print("找到 Turnstile iframe，切换上下文...")
+                              self.page.frame.to_frame(turnstile_iframe)
+                              turnstile_container = self.page.ele("xpath://div[contains(@class, 'cf-turnstile')]", timeout=20)
+                              self.page.frame.to_main()
 
                       if turnstile_container:
                           print(f"找到 Turnstile 容器: {turnstile_container.attrs}")
                           try:
-                              # 尝试通过 JavaScript 触发验证
-                              self.page.run_js("document.querySelector('.cf-turnstile').click();", timeout=10)
-                              print("尝试通过 JavaScript 点击 Turnstile 容器")
-                              sleep(15)  # 等待验证完成
+                              # 模拟鼠标点击
+                              self.page.run_js("""
+                                  var element = document.querySelector('.cf-turnstile');
+                                  if (element) {
+                                      var rect = element.getBoundingClientRect();
+                                      var x = rect.left + (rect.width / 2);
+                                      var y = rect.top + (rect.height / 2);
+                                      var clickEvent = new MouseEvent('click', {
+                                          view: window,
+                                          bubbles: true,
+                                          cancelable: true,
+                                          clientX: x,
+                                          clientY: y
+                                      });
+                                      element.dispatchEvent(clickEvent);
+                                  }
+                              """, timeout=10)
+                              print("通过 JavaScript 模拟鼠标点击 Turnstile 容器")
+                              sleep(20)  # 等待验证完成
                           except Exception as e:
                               print(f"JavaScript 点击失败: {str(e)}")
-                              self.page.run_js("document.querySelector('#uATa8').click();", timeout=10)
-                              print("尝试备用 JavaScript 点击")
-                              sleep(15)
+                              # 尝试直接调用 Turnstile 的 callback
+                              self.page.run_js("if (window.turnstile) { window.turnstile.render(); }", timeout=10)
+                              print("尝试调用 Turnstile render 方法")
+                              sleep(20)
                       else:
-                          print("未找到 Turnstile 容器，保存页面内容以供调试")
+                          print("未找到 Turnstile 容器或 iframe，保存页面内容以供调试")
                           Path("debug_page.html").write_text(self.page.html)
                           return False
 
