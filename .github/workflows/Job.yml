@@ -32,6 +32,7 @@ jobs:
         run: |
           python - <<EOF
           import os
+          import re
           from time import sleep
           from DrissionPage import ChromiumPage, ChromiumOptions
           from pathlib import Path
@@ -52,10 +53,9 @@ jobs:
 
               def handle_cloudflare(self):
                   """ 处理 Cloudflare 五秒盾验证 """
-                  # 检查是否出现 Cloudflare 挑战 iframe
                   if not self.page.ele('iframe[src*="challenge"]', timeout=15):
                       print("未检测到 Cloudflare 挑战")
-                      return True  # 没有挑战，直接返回成功
+                      return True
 
                   print("检测到 Cloudflare 五秒盾，开始处理...")
 
@@ -83,7 +83,6 @@ jobs:
                           print("检测到二次验证，等待完成...")
                           wait_elem.wait.disappear(timeout=30)
 
-                      # 确保跳转到原始网页
                       sleep(5)  # 额外等待5秒，确保页面加载完成
                       return True
                   except Exception as e:
@@ -103,11 +102,22 @@ jobs:
                           if not self.handle_cloudflare():
                               raise Exception("无法完成 Cloudflare 验证")
 
+                      # 等待页面加载完成
+                      sleep(5)  # 确保页面内容加载
+                      html_content = self.page.html
+                      print(f"页面内容长度: {len(html_content)} 字节")
+
+                      # 检查是否跳转到原始网页
+                      if re.search(r'Create an account', html_content):
+                          print("成功跳转到原始网页，找到 'Create an account'")
+                      else:
+                          print("未找到 'Create an account'，可能未跳转到原始网页")
+
                       # 提取 cookies 并保存
                       cookies = self.page.cookies()
                       cookie_str = '\n'.join([f"{c['name']}={c['value']}" for c in cookies])
-                      Path('serv00_cookies.txt').write_text(cookie_str)
                       print(f"获取到的 cookies:\n{cookie_str}")
+                      Path('serv00_cookies.txt').write_text(cookie_str)
 
                       return True
                   finally:
