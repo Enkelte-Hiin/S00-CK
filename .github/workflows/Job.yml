@@ -13,30 +13,36 @@ jobs:
     - name: Run in Docker
       uses: addnab/docker-run-action@v3
       with:
-        image: ubuntu:22.04  # 改用新版Ubuntu镜像
+        image: ubuntu:22.04
         options: >-
           -v ${{ github.workspace }}:/app
           -w /app
           --privileged
           -e DISPLAY=:99
         run: |
-          # 安装Chrome 120
+          # 安装基础依赖
           apt-get update && \
           apt-get install -y \
             wget \
             gnupg \
             xvfb \
             tesseract-ocr \
-            libgl1-mesa-glx
+            libgl1-mesa-glx \
+            python3.10 \
+            python3.10-venv  # 新增Python虚拟环境支持
 
-          # 添加Google Chrome源
+          # 安装Chrome 120
           wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - && \
           echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list && \
           apt-get update && \
           apt-get install -y google-chrome-stable=120.0.6099.224-1
 
+          # 配置Python环境
+          python3.10 -m venv /opt/venv  # 创建虚拟环境
+          . /opt/venv/bin/activate  # 激活虚拟环境
+          pip install --upgrade pip
+
           # 安装Python依赖
-          apt-get install -y python3-pip && \
           pip install --no-cache-dir \
             undetected-chromedriver==3.5.5 \
             selenium==4.15.2 \
@@ -46,4 +52,4 @@ jobs:
 
           # 启动服务并运行
           Xvfb :99 -screen 0 1920x1080x24 &
-          python S00_CK.py
+          python3.10 S00_CK.py  # 使用完整版本号调用
