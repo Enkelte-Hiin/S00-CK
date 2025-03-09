@@ -52,7 +52,7 @@ jobs:
 
               def handle_cloudflare(self):
                   """ 处理 Cloudflare 验证 """
-                  if not self.page.wait.ele('iframe[src*="challenge"]', timeout=15):
+                  if not self.page.ele('iframe[src*="challenge"]', timeout=15):
                       return False
 
                   # 切换到 Cloudflare 挑战 iframe
@@ -90,8 +90,9 @@ jobs:
                           if not self.handle_cloudflare():
                               raise Exception("无法完成 Cloudflare 验证")
 
-                      # 确保页面加载完成
-                      self.page.wait.ele('input[name="username"]', timeout=30)
+                      # 确保页面加载完成并检查元素
+                      if not self.page.ele('input[name="username"]', timeout=30):
+                          raise Exception("页面未找到 'username' 输入框")
 
                       # 提取 cookies 并保存
                       cookies = self.page.cookies()
