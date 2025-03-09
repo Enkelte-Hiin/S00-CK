@@ -10,12 +10,32 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Run with Chrome Docker
+    - name: Run in Docker with Python
       uses: addnab/docker-run-action@v3
       with:
-        image: seleniarm/standalone-chromium:120.0  # 指定稳定版本
-        options: -v ${{ github.workspace }}:/app -w /app
+        image: python:3.10-slim-buster  # 使用官方Python镜像
+        options: |
+          -v ${{ github.workspace }}:/app
+          -w /app
+          --privileged  # 授予root权限
+          -e DISPLAY=:99
         run: |
-          apt-get update && apt-get install -y tesseract-ocr
-          pip install undetected-chromedriver pytesseract opencv-python-headless
+          # 安装浏览器和依赖
+          apt-get update && \
+          apt-get install -y \
+            xvfb \
+            chromium \
+            chromium-driver \
+            tesseract-ocr \
+            libgl1-mesa-glx
+
+          # 安装Python依赖
+          pip install --no-cache-dir \
+            undetected-chromedriver==3.5.5 \
+            selenium==4.15.2 \
+            opencv-python-headless==4.8.1.78 \
+            pytesseract==0.3.10
+
+          # 启动虚拟显示并运行
+          Xvfb :99 -screen 0 1920x1080x24 &
           python S00_CK.py
