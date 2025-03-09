@@ -65,36 +65,44 @@ jobs:
                   # 检查是否为 Cloudflare/Turnstile 验证页面
                   if "verify you are human" in html_content or "cloudflare" in html_content or "cf-turnstile" in html_content:
                       print("检测到 Cloudflare/Turnstile 验证，开始处理...")
+                      sleep(5)  # 等待页面加载
 
-                      # 尝试定位可见的 checkbox
+                      # 尝试多种选择器定位可交互元素
                       checkbox = self.page.ele("xpath://input[@type='checkbox' and not(@type='hidden')]", timeout=20)
                       if not checkbox:
-                          print("未找到可见 checkbox，尝试备用选择器...")
+                          print("未找到可见 checkbox，尝试备用选择器 1...")
                           checkbox = self.page.ele("xpath://label[contains(text(), 'Verify you are human')]/input", timeout=20)
+                      if not checkbox:
+                          print("未找到备用选择器 1，尝试备用选择器 2...")
+                          checkbox = self.page.ele("xpath://*[contains(text(), 'Verify you are human')]/preceding-sibling::input", timeout=20)
+                      if not checkbox:
+                          print("未找到备用选择器 2，尝试基于 Cloudflare 元素...")
+                          checkbox = self.page.ele("xpath://div[contains(@class, 'cf-turnstile')]/input", timeout=20)
 
                       if checkbox:
-                          print(f"找到 checkbox: {checkbox.attrs}")
+                          print(f"找到交互元素: {checkbox.attrs}")
                           try:
                               # 检查可见性并点击
                               if hasattr(checkbox, 'visible') and checkbox.visible:
                                   checkbox.click()
-                                  print("通过常规方法点击 checkbox")
+                                  print("通过常规方法点击交互元素")
                               else:
-                                  print("checkbox 不可见，尝试 JavaScript 点击...")
+                                  print("交互元素不可见，尝试 JavaScript 点击...")
                                   self.page.run_js("arguments[0].click();", checkbox)
-                                  print("通过 JavaScript 点击 checkbox")
-                              sleep(5)  # 等待验证完成
+                                  print("通过 JavaScript 点击交互元素")
+                              sleep(10)  # 增加等待时间，确保验证完成
                           except AttributeError:
-                              print("checkbox 无 visible 属性，跳过可见性检查")
+                              print("交互元素无 visible 属性，直接使用 JavaScript 点击...")
                               self.page.run_js("arguments[0].click();", checkbox)
-                              print("通过 JavaScript 点击 checkbox")
-                              sleep(5)
+                              print("通过 JavaScript 点击交互元素")
+                              sleep(10)
                       else:
-                          print("未找到任何可点击的 checkbox")
+                          print("未找到任何可点击的交互元素，保存页面内容以供调试")
+                          Path("debug_page.html").write_text(self.page.html)
                           return False
 
                       # 等待验证完成
-                      wait_elem = self.page.ele("css:#cf-please-wait", timeout=20)
+                      wait_elem = self.page.ele("css:#cf-please-wait", timeout=30)
                       if wait_elem:
                           print("检测到 'Please Wait'，等待消失...")
                           wait_elem.wait.disappear(timeout=60)
@@ -180,3 +188,4 @@ jobs:
             serv00_cookies.txt
             screenshot.png
             page_content.html
+            debug_page.html  # 新增调试文件
