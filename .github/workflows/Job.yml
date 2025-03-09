@@ -60,6 +60,9 @@ jobs:
                   options.set_argument("--ignore-certificate-errors")
                   options.set_argument("--disable-web-security")
                   options.set_argument("--allow-running-insecure-content")
+                  options.set_argument("--mute-audio")
+                  options.set_argument("--disable-extensions")
+                  options.set_argument("--disable-dev-tools")
                   options.set_user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
                   self.page = ChromiumPage(addr_or_opts=options)
 
@@ -70,7 +73,7 @@ jobs:
                   # 检查是否为 Cloudflare/Turnstile 验证页面
                   if "verify you are human" in html_content or "cloudflare" in html_content or "cf-turnstile" in html_content:
                       print("检测到 Cloudflare/Turnstile 验证，开始处理...")
-                      sleep(20)  # 等待页面和脚本加载
+                      sleep(20)  # 初始等待，加载页面和脚本
 
                       # 动态获取 sitekey
                       sitekey = None
@@ -110,7 +113,7 @@ jobs:
                               }}
                           """, timeout=20)
                           print("已调用 turnstile.render()，等待渲染...")
-                          sleep(30)  # 延长等待时间，确保渲染完成
+                          sleep(40)  # 延长等待时间，确保渲染完成
                       except Exception as e:
                           print(f"调用 turnstile.render() 失败: {str(e)}")
                           Path("debug_render.html").write_text(self.page.html)
@@ -118,7 +121,7 @@ jobs:
 
                       # 等待 Turnstile 元素或 iframe 出现
                       turnstile_container = None
-                      for _ in range(3):  # 尝试 3 次
+                      for _ in range(5):  # 增加重试次数
                           turnstile_container = self.page.ele("xpath://div[contains(@class, 'cf-turnstile')]", timeout=20)
                           if turnstile_container:
                               break
@@ -127,7 +130,7 @@ jobs:
 
                       if not turnstile_container:
                           print("未找到 Turnstile 容器，尝试检查 iframe...")
-                          turnstile_iframe = self.page.ele("xpath://iframe[contains(@src, 'challenges.cloudflare.com')]", timeout=20)
+                          turnstile_iframe = self.page.ele("xpath://iframe[contains(@src, 'challenges.cloudflare.com') or contains(@src, 'cf-turnstile')]", timeout=20)
                           if turnstile_iframe:
                               print("找到 Turnstile iframe，切换上下文...")
                               self.page.frame.to_frame(turnstile_iframe)
