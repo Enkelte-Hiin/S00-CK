@@ -23,6 +23,8 @@ jobs:
 
       - name: Install dependencies
         run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser
           python -m pip install --upgrade pip
           pip install DrissionPage
 
@@ -42,6 +44,7 @@ jobs:
                   options.set_argument('--disable-blink-features=AutomationControlled')
                   options.set_argument('--lang=en-US')
                   options.set_argument('--disable-popup-blocking')
+                  options.set_argument('--no-sandbox')  # 添加此参数以在 Linux 环境中运行
 
                   # 初始化浏览器
                   self.page = ChromiumPage(addr_or_opts=options)
