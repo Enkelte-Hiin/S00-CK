@@ -88,7 +88,7 @@ def main_flow():
         # 等待页面加载
         WebDriverWait(driver, TIMEOUT).until(
             EC.presence_of_element_located((By.TAG_NAME, "body"))
-        
+        )
         # 截图并匹配
         screenshot_path = "page_screenshot.png"
         driver.save_screenshot(screenshot_path)
