@@ -1,108 +1,108 @@
-name: Serv00 Crawler
+name: Python Script Workflow
 
 on:
   push:
     branches:
       - main
-  schedule:
-    - cron: '0 */6 * * *'  # 每6小时运行一次
-  workflow_dispatch:  # 允许手动触发
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  crawl:
+  run-python-script:
     runs-on: ubuntu-latest
-
+    env:
+      SERV00_URL: https://www.serv00.com/offer/create_new_account  # 设置环境变量
     steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
-      - name: 设置 Python 3.10
-        uses: actions/setup-python@v4
+      - name: Set up Python
+        uses: actions/setup-python@v2
         with:
-          python-version: '3.10'
+          python-version: '3.10'  # 设置 Python 版本
 
-      - name: 安装依赖
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install DrissionPage
+          pip install drission
 
-      - name: 运行爬虫获取 Cookie
-        env:
-          SERV00_URL: "https://www.serv00.com/offer/create_new_account"
+      - name: Run Python script
         run: |
           python - <<EOF
-          import os
-          from time import sleep
-          from DrissionPage import ChromiumOptions, ChromiumPage
-          from pathlib import Path
+import os
+from time import sleep
+from DrissionPage import ChromiumPage, SessionOptions
+from pathlib import Path
 
-          class Serv00Crawler:
-              def __init__(self):
-                  options = ChromiumOptions()
-                  options.set_argument('--headless=new')
-                  options.set_argument('--disable-blink-features=AutomationControlled')
-                  options.set_argument('--lang=en-US')
-                  options.set_argument('--disable-popup-blocking')
+class Serv00Crawler:
+    def __init__(self):
+        options = SessionOptions()
+        options.set_argument('--headless=new')
+        options.set_argument('--disable-blink-features=AutomationControlled')
+        options.set_argument('--lang=en-US')
+        options.set_argument('--disable-popup-blocking')
 
-                  self.page = ChromiumPage(options=options)
-                  self.page.set_user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
+        # 初始化浏览器
+        self.page = ChromiumPage(session_options=options)
+        self.page.set_user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
 
-              def handle_cloudflare(self):
-                  if not self.page.wait.ele_loaded('iframe[src*="challenge"]', timeout=15):
-                      return False
+    def handle_cloudflare(self):
+        """ 处理 Cloudflare 验证 """
+        if not self.page.wait.ele_loaded('iframe[src*="challenge"]', timeout=15):
+            return False
 
-                  challenge_frame = self.page.ele('iframe[src*="challenge"]')
-                  if challenge_frame:
-                      self.page.frame.to_frame(challenge_frame)
+        # 切换到 Cloudflare 挑战 iframe
+        challenge_frame = self.page.ele('iframe[src*="challenge"]')
+        if challenge_frame:
+            self.page.frame.to_frame(challenge_frame)
 
-                  try:
-                      verify_btn = self.page.ele('#cf-stage')
-                      if verify_btn:
-                          verify_btn.click()
-                          print("点击 Cloudflare 验证按钮成功")
+        try:
+            verify_btn = self.page.ele('#cf-stage')
+            if verify_btn:
+                verify_btn.click()
+                print("点击 Cloudflare 验证按钮成功")
 
-                      self.page.frame.to_main()
-                      self.page.wait.load_start()
+            self.page.frame.to_main()
+            self.page.wait.load_start()
 
-                      wait_elem = self.page.ele('div#cf-please-wait', timeout=5)
-                      if wait_elem:
-                          print("检测到二次验证，等待完成...")
-                          wait_elem.wait.disappear(timeout=180)
+            wait_elem = self.page.ele('div#cf-please-wait', timeout=5)
+            if wait_elem:
+                print("检测到二次验证，等待完成...")
+                wait_elem.wait.disappear(timeout=180)
 
-                      return True
-                  except Exception as e:
-                      print(f"验证失败: {str(e)}")
-                      return False
+            return True
+        except Exception as e:
+            print(f"验证失败: {str(e)}")
+            return False
 
-              def get_cookies(self):
-                  try:
-                      self.page.get(os.environ['SERV00_URL'])
+    def get_cookies(self):
+        """ 获取目标网站的 cookies """
+        try:
+            self.page.get(os.environ['SERV00_URL'])
 
-                      if "challenges" in self.page.url:
-                          print("检测到 Cloudflare 验证")
-                          if not self.handle_cloudflare():
-                              raise Exception("无法完成 Cloudflare 验证")
+            # 处理可能的 Cloudflare 验证
+            if "challenges" in self.page.url:
+                print("检测到 Cloudflare 验证")
+                if not self.handle_cloudflare():
+                    raise Exception("无法完成 Cloudflare 验证")
 
-                      self.page.wait.ele_loaded('input[name="username"]', timeout=30)
+            # 确保页面加载完成
+            self.page.wait.ele_loaded('input[name="username"]', timeout=30)
 
-                      cookies = self.page.cookies()
-                      cookie_str = '\n'.join([f"{c['name']}={c['value']}" for c in cookies])
-                      Path('serv00_cookies.txt').write_text(cookie_str)
+            # 提取 cookies 并保存
+            cookies = self.page.cookies()
+            cookie_str = '\n'.join([f"{c['name']}={c['value']}" for c in cookies])
+            Path('serv00_cookies.txt').write_text(cookie_str)
 
-                      return True
-                  finally:
-                      self.page.quit()
+            return True
+        finally:
+            self.page.quit()
 
-          if __name__ == '__main__':
-              crawler = Serv00Crawler()
-              if crawler.get_cookies():
-                  print("Cookie 获取成功")
-              else:
-                  raise Exception("Cookie 获取失败")
-          EOF
-
-      - name: 上传 Cookie 作为 Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: serv00_cookies
-          path: serv00_cookies.txt
+if __name__ == '__main__':
+    crawler = Serv00Crawler()
+    if crawler.get_cookies():
+        print("Cookie 获取成功")
+    else:
+        raise Exception("Cookie 获取失败")
+EOF
