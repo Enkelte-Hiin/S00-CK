@@ -55,6 +55,8 @@ jobs:
                   options.set_argument("--no-sandbox")
                   options.set_argument("--disable-dev-shm-usage")
                   options.set_argument("--window-size=1920,1080")
+                  options.set_argument("--disable-gpu")
+                  options.set_argument("--enable-features=NetworkService,NetworkServiceInProcess")
                   options.set_user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
                   self.page = ChromiumPage(addr_or_opts=options)
 
@@ -65,9 +67,28 @@ jobs:
                   # 检查是否为 Cloudflare/Turnstile 验证页面
                   if "verify you are human" in html_content or "cloudflare" in html_content or "cf-turnstile" in html_content:
                       print("检测到 Cloudflare/Turnstile 验证，开始处理...")
-                      sleep(20)  # 延长等待时间，确保 Turnstile 加载
+                      sleep(20)  # 等待页面和脚本加载
 
-                      # 等待 Turnstile 元素出现
+                      # 手动触发 Turnstile 渲染
+                      try:
+                          self.page.run_js("""
+                              if (window.turnstile) {
+                                  turnstile.render('#uATa8', {
+                                      sitekey: '0x4AAAAAAADnP3VuvWv_5tNq',
+                                      callback: function(token) {
+                                          document.querySelector('#cf-chl-widget-7oz3q_response').value = token;
+                                      }
+                                  });
+                              }
+                          """, timeout=20)
+                          print("已调用 turnstile.render()，等待渲染...")
+                          sleep(20)  # 等待 Turnstile 渲染和验证
+                      except Exception as e:
+                          print(f"调用 turnstile.render() 失败: {str(e)}")
+                          Path("debug_render.html").write_text(self.page.html)
+                          return False
+
+                      # 等待 Turnstile 元素或 iframe 出现
                       turnstile_container = None
                       for _ in range(3):  # 尝试 3 次
                           turnstile_container = self.page.ele("xpath://div[contains(@class, 'cf-turnstile')]", timeout=20)
@@ -109,10 +130,7 @@ jobs:
                               sleep(20)  # 等待验证完成
                           except Exception as e:
                               print(f"JavaScript 点击失败: {str(e)}")
-                              # 尝试直接调用 Turnstile 的 callback
-                              self.page.run_js("if (window.turnstile) { window.turnstile.render(); }", timeout=10)
-                              print("尝试调用 Turnstile render 方法")
-                              sleep(20)
+                              return False
                       else:
                           print("未找到 Turnstile 容器或 iframe，保存页面内容以供调试")
                           Path("debug_page.html").write_text(self.page.html)
@@ -206,3 +224,4 @@ jobs:
             screenshot.png
             page_content.html
             debug_page.html
+            debug_render.html
