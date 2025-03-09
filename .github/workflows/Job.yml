@@ -85,6 +85,7 @@ jobs:
                       self.page.frame.to_main()
 
               def get_cookies(self):
+                  success = False
                   try:
                       self.page.get("https://www.serv00.com/offer/create_new_account")
                       print(f"当前 URL: {self.page.url}")
@@ -94,10 +95,14 @@ jobs:
                       sleep(10)  # 等待页面加载
                       html_content = self.page.html
                       print(f"页面内容长度: {len(html_content)} 字节")
-                      # 保存截图以调试
+                      # 保存截图
                       screenshot_path = Path("screenshot.png")
-                      self.page.screenshot(path=str(screenshot_path))
-                      print(f"已保存页面截图到: {screenshot_path}")
+                      try:
+                          self.page.get_screenshot(path=str(screenshot_path))
+                          print(f"已保存页面截图到: {screenshot_path}")
+                      except Exception as e:
+                          print(f"截图失败: {str(e)}")
+                      # 检查页面内容
                       if re.search(r"Create an account", html_content):
                           print("成功跳转到目标页面，找到 'Create an account'")
                       else:
@@ -110,11 +115,15 @@ jobs:
                       cookie_str = "\n".join([c["name"] + "=" + c["value"] for c in cookies])
                       print(f"获取到的 cookies:\n{cookie_str}")
                       Path("serv00_cookies.txt").write_text(cookie_str)
+                      success = True
                       return True
                   except Exception as e:
                       print(f"获取 cookies 失败: {str(e)}")
                       return False
                   finally:
+                      if not success:
+                          # 即使失败，也保存当前 HTML 内容以供调试
+                          Path("page_content.html").write_text(self.page.html)
                       self.page.quit()
 
           if __name__ == "__main__":
@@ -133,3 +142,4 @@ jobs:
           path: |
             serv00_cookies.txt
             screenshot.png
+            page_content.html
