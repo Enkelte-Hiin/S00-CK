@@ -21,21 +21,15 @@ jobs:
           -e DISPLAY=:99
         run: |
           # 安装系统依赖
-          apt-get update && \
+          apt-get update -y && \
           apt-get install -y \
-            wget \
-            gnupg \
             xvfb \
+            chromium-browser \
+            chromium-chromedriver \
             tesseract-ocr \
             libgl1-mesa-glx \
             python3.10 \
             python3.10-venv
-
-          # 安装Chrome 120
-          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - && \
-          echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list && \
-          apt-get update && \
-          apt-get install -y google-chrome-stable=120.0.6099.224-1
 
           # 配置Python环境
           python3.10 -m venv /opt/venv
