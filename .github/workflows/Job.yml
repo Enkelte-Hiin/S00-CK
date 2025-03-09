@@ -1,1 +1,107 @@
+name: CF Interactive Crawler
 
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get install -y libgbm-dev
+        pip install drissionpage
+
+    - name: Install Chromium
+      uses: browser-actions/setup-chromium@v1
+      with:
+        chromium-version: 'latest'
+
+    - name: Run crawler
+      env:
+        CF_SITE_URL: ${{ secrets.CF_SITE_URL }}
+      run: |
+        python - <<EOF
+        import os
+        import time
+        from DrissionPage import ChromiumPage
+        from pathlib import Path
+
+        def handle_cf_challenge(page):
+            # 识别验证框架
+            challenge_frame = page('iframe[src*="challenge"]', timeout=10)
+            if challenge_frame:
+                page.wait.ele_displayed(challenge_frame)
+                page.switch_to.frame(challenge_frame)
+                
+                # 点击验证按钮
+                verify_btn = page('#cf-stage', timeout=10)
+                if verify_btn:
+                    verify_btn.click()
+                    print("Clicked verify button")
+                    
+                    # 等待验证完成（根据实际情况调整）
+                    page.wait(15)
+                    page.switch_to.main_frame()
+                    
+                    # 检查是否出现二级验证
+                    if page('div#cf-please-wait', timeout=5).ele_exists():
+                        print("Detected secondary challenge")
+                        page('div#cf-please-wait').wait.disappear(timeout=120)
+                    return True
+                return False
+            return False
+
+        def get_cf_cookies():
+            page = ChromiumPage(
+                headless=True,
+                no_imgs=True,
+                # 反检测配置
+                driver_options={
+                    'arguments': [
+                        '--disable-blink-features=AutomationControlled',
+                        '--disable-infobars'
+                    ]
+                }
+            )
+            
+            # 设置User-Agent
+            page.set.user_agent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+            
+            page.get(os.environ['CF_SITE_URL'])
+            
+            # 处理验证流程
+            if page.title in ['Just a moment...', 'Please Wait...']:
+                if handle_cf_challenge(page):
+                    print("Challenge solved")
+                else:
+                    print("Failed to solve challenge")
+                    return False
+                
+            # 获取最终cookies
+            cookies = page.cookies
+            cookie_str = '\n'.join([f"{c['name']}={c['value']}" for c in cookies])
+            
+            Path('cf_cookies.txt').write_text(cookie_str)
+            page.quit()
+            return True
+
+        if __name__ == '__main__':
+            get_cf_cookies()
+        EOF
+
+    - name: Upload cookies
+      uses: actions/upload-artifact@v3
+      with:
+        name: cf-cookies
+        path: cf_cookies.txt
