@@ -20,23 +20,38 @@ jobs:
           --privileged
           -e DISPLAY=:99
         run: |
-          # 安装系统依赖
-          apt-get update -y && \
+          # ================== 系统配置 ==================
+          apt-get update -y
+          
+          # 安装浏览器核心依赖
           apt-get install -y \
-            xvfb \
             chromium-browser \
             chromium-chromedriver \
+            xvfb \
             tesseract-ocr \
             libgl1-mesa-glx \
+            libnss3 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxrandr2 \
+            libgbm1 \
+            libasound2 \
+            libpango-1.0-0 \
+            libcairo2 \
             python3.10 \
             python3.10-venv
 
-          # 配置Python环境
+          # 配置浏览器环境
+          ln -s /usr/bin/chromium-browser /usr/bin/google-chrome
+          chmod +x /usr/lib/chromium-browser/chromedriver
+          ln -s /usr/lib/chromium-browser/chromedriver /usr/local/bin/chromedriver
+
+          # ================== Python环境 ==================
           python3.10 -m venv /opt/venv
           . /opt/venv/bin/activate
           pip install --upgrade pip
-
-          # 安装Python包
+          
+          # 安装依赖（固定版本）
           pip install --no-cache-dir \
             undetected-chromedriver==3.5.5 \
             selenium==4.15.2 \
@@ -44,6 +59,10 @@ jobs:
             numpy==1.26.4 \
             pytesseract==0.3.10
 
-          # 启动服务并运行
+          # ================== 清理缓存 ==================
+          rm -rf ~/.cache/chromium
+          rm -rf ~/.local/share/undetected_chromedriver
+
+          # ================== 执行脚本 ==================
           Xvfb :99 -screen 0 1920x1080x24 &
           python3.10 S00_CK.py
