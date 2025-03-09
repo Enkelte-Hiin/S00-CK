@@ -94,6 +94,10 @@ jobs:
                       sleep(10)  # 等待页面加载
                       html_content = self.page.html
                       print(f"页面内容长度: {len(html_content)} 字节")
+                      # 保存截图以调试
+                      screenshot_path = Path("screenshot.png")
+                      self.page.screenshot(path=str(screenshot_path))
+                      print(f"已保存页面截图到: {screenshot_path}")
                       if re.search(r"Create an account", html_content):
                           print("成功跳转到目标页面，找到 'Create an account'")
                       else:
@@ -121,9 +125,11 @@ jobs:
                   raise Exception("Cookie 获取失败")
           EOF
 
-      - name: 上传 Cookies 文件
+      - name: 上传 Cookies 文件和截图
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: serv00-cookies
-          path: serv00_cookies.txt
+          name: serv00-output
+          path: |
+            serv00_cookies.txt
+            screenshot.png
