@@ -18,7 +18,13 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y xvfb libgl1-mesa-glx tesseract-ocr tesseract-ocr-eng
+        sudo apt-get install -y xvfb \
+          libgl1 \               # 替代 libgl1-mesa-glx
+          libglx0 \              # 新增必要图形库
+          libxkbcommon0 \        # Chrome 依赖
+          libx11-xcb1 \          # X11 兼容
+          tesseract-ocr \ 
+          tesseract-ocr-eng
 
     - name: Install Python packages
       run: |
@@ -30,6 +36,6 @@ jobs:
     - name: Run script
       env:
         DISPLAY: :99
-        UC_TELEMETRY: "no"  # 禁用遥测
+        UC_TELEMETRY: "no"
       run: |
         python S00_CK.py
