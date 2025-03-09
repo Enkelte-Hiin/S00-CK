@@ -17,13 +17,22 @@ jobs:
 
     - name: Install system dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y xvfb \
-          libgl1 \               # 替代 libgl1-mesa-glx
-          libglx0 \              # 新增必要图形库
-          libxkbcommon0 \        # Chrome 依赖
-          libx11-xcb1 \          # X11 兼容
-          tesseract-ocr \ 
+        # 启用 universe 仓库
+        sudo add-apt-repository -y universe
+        sudo apt-get update -y
+        
+        # 安装核心依赖
+        sudo apt-get install -y \
+          xvfb \
+          libgl1 \ 
+          libglx0 \
+          libxkbcommon0 \
+          libx11-xcb1 \
+          libgles2 \
+          libegl1 \
+          libgbm1 \
+          libasound2 \
+          tesseract-ocr \
           tesseract-ocr-eng
 
     - name: Install Python packages
