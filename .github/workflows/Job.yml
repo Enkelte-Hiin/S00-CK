@@ -15,19 +15,25 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Install system dependencies
+    - name: Fix Ubuntu sources
       run: |
-        # 强制重置软件源配置
-        sudo rm -f /etc/apt/sources.list.d/*  # 清除第三方源
-        sudo add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu jammy main universe multiverse"  # 核心源
-        sudo add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu jammy-updates main universe multiverse"
+        # 清除所有软件源配置
+        sudo rm -rf /etc/apt/sources.list.d/*
+        # 使用阿里云镜像源
+        echo "deb http://mirrors.aliyun.com/ubuntu/ jammy main restricted universe multiverse" | sudo tee /etc/apt/sources.list
+        echo "deb http://mirrors.aliyun.com/ubuntu/ jammy-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list
+        echo "deb http://mirrors.aliyun.com/ubuntu/ jammy-security main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list
         sudo apt-get update -y
-        
-        # 安装必要依赖
+
+    - name: Install core dependencies
+      run: |
+        # 安装基础工具
+        sudo apt-get install -y software-properties-common
+        # 安装关键依赖
         sudo apt-get install -y \
           xvfb \
           libgl1-mesa-glx \
-          libxkbcommon0 \  # 新增关键依赖
+          libxkbcommon0 \
           tesseract-ocr \
           tesseract-ocr-eng
 
