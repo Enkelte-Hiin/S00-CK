@@ -65,39 +65,28 @@ jobs:
                   # 检查是否为 Cloudflare/Turnstile 验证页面
                   if "verify you are human" in html_content or "cloudflare" in html_content or "cf-turnstile" in html_content:
                       print("检测到 Cloudflare/Turnstile 验证，开始处理...")
-                      sleep(5)  # 等待页面加载
+                      sleep(10)  # 等待 Turnstile 加载
 
-                      # 尝试多种选择器定位可交互元素
-                      checkbox = self.page.ele("xpath://input[@type='checkbox' and not(@type='hidden')]", timeout=20)
-                      if not checkbox:
-                          print("未找到可见 checkbox，尝试备用选择器 1...")
-                          checkbox = self.page.ele("xpath://label[contains(text(), 'Verify you are human')]/input", timeout=20)
-                      if not checkbox:
-                          print("未找到备用选择器 1，尝试备用选择器 2...")
-                          checkbox = self.page.ele("xpath://*[contains(text(), 'Verify you are human')]/preceding-sibling::input", timeout=20)
-                      if not checkbox:
-                          print("未找到备用选择器 2，尝试基于 Cloudflare 元素...")
-                          checkbox = self.page.ele("xpath://div[contains(@class, 'cf-turnstile')]/input", timeout=20)
+                      # 尝试定位 Turnstile 容器
+                      turnstile_container = self.page.ele("xpath://div[contains(@class, 'cf-turnstile')]", timeout=20)
+                      if not turnstile_container:
+                          print("未找到 Turnstile 容器，尝试备用选择器...")
+                          turnstile_container = self.page.ele("xpath://div[@id='uATa8']", timeout=20)
 
-                      if checkbox:
-                          print(f"找到交互元素: {checkbox.attrs}")
+                      if turnstile_container:
+                          print(f"找到 Turnstile 容器: {turnstile_container.attrs}")
                           try:
-                              # 检查可见性并点击
-                              if hasattr(checkbox, 'visible') and checkbox.visible:
-                                  checkbox.click()
-                                  print("通过常规方法点击交互元素")
-                              else:
-                                  print("交互元素不可见，尝试 JavaScript 点击...")
-                                  self.page.run_js("arguments[0].click();", checkbox)
-                                  print("通过 JavaScript 点击交互元素")
-                              sleep(10)  # 增加等待时间，确保验证完成
-                          except AttributeError:
-                              print("交互元素无 visible 属性，直接使用 JavaScript 点击...")
-                              self.page.run_js("arguments[0].click();", checkbox)
-                              print("通过 JavaScript 点击交互元素")
-                              sleep(10)
+                              # 尝试通过 JavaScript 触发验证
+                              self.page.run_js("document.querySelector('.cf-turnstile').click();", timeout=10)
+                              print("尝试通过 JavaScript 点击 Turnstile 容器")
+                              sleep(15)  # 等待验证完成
+                          except Exception as e:
+                              print(f"JavaScript 点击失败: {str(e)}")
+                              self.page.run_js("document.querySelector('#uATa8').click();", timeout=10)
+                              print("尝试备用 JavaScript 点击")
+                              sleep(15)
                       else:
-                          print("未找到任何可点击的交互元素，保存页面内容以供调试")
+                          print("未找到 Turnstile 容器，保存页面内容以供调试")
                           Path("debug_page.html").write_text(self.page.html)
                           return False
 
@@ -188,4 +177,4 @@ jobs:
             serv00_cookies.txt
             screenshot.png
             page_content.html
-            debug_page.html  # 新增调试文件
+            debug_page.html
