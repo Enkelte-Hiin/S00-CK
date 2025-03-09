@@ -53,32 +53,38 @@ jobs:
                   options.set_argument("--lang=en-US")
                   options.set_argument("--disable-popup-blocking")
                   options.set_argument("--no-sandbox")
-                  options.set_argument("--disable-dev-shm-usage")  # 避免共享内存问题
+                  options.set_argument("--disable-dev-shm-usage")
+                  options.set_argument("--window-size=1920,1080")  # 伪装窗口大小
                   options.set_user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
                   self.page = ChromiumPage(addr_or_opts=options)
 
               def handle_cloudflare(self):
                   print(f"当前 URL: {self.page.url}")
-                  # 等待页面加载并检查 iframe
-                  iframe = self.page.ele("iframe[src*=\"challenge\"]", timeout=30)
-                  if not iframe:
-                      print("未检测到 Cloudflare 挑战 iframe，可能已通过或页面未加载")
-                      return True
+                  html_content = self.page.html.lower()
 
-                  print("检测到 Cloudflare 五秒盾，开始处理...")
-                  self.page.frame.to_frame(iframe)
-                  try:
-                      # 更精确地定位 checkbox
+                  # 检查页面是否包含 Cloudflare 验证标志
+                  if "verify you are human" in html_content or "cloudflare" in html_content:
+                      print("检测到 Cloudflare 验证，开始处理...")
+
+                      # 直接在主页面寻找 checkbox
                       checkbox = self.page.ele("xpath://input[@type='checkbox']", timeout=20)
                       if not checkbox:
                           print("未找到 checkbox，尝试备用选择器...")
-                          checkbox = self.page.ele("css:input", timeout=10)  # 宽泛选择所有 input
+                          checkbox = self.page.ele("css:input", timeout=10)
 
                       if checkbox:
                           print(f"找到 checkbox: {checkbox.attrs}")
                           if checkbox.visible:
+                              # 尝试直接点击
                               checkbox.click()
-                              print("成功点击 checkbox")
+                              print("通过常规方法点击 checkbox")
+                              sleep(2)  # 等待点击生效
+                              # 如果常规点击无效，尝试 JavaScript 点击
+                              if "verify you are human" in self.page.html.lower():
+                                  print("常规点击可能无效，尝试 JavaScript 点击...")
+                                  self.page.run_js("arguments[0].click();", checkbox)
+                                  print("通过 JavaScript 点击 checkbox")
+                              sleep(5)  # 等待验证完成
                           else:
                               print("checkbox 不可见，无法点击")
                               return False
@@ -87,8 +93,6 @@ jobs:
                           return False
 
                       # 等待验证完成
-                      self.page.frame.to_main()
-                      sleep(5)  # 等待页面响应点击
                       wait_elem = self.page.ele("css:#cf-please-wait", timeout=20)
                       if wait_elem:
                           print("检测到 'Please Wait'，等待消失...")
@@ -96,16 +100,14 @@ jobs:
                           sleep(5)
 
                       # 检查是否仍停留在挑战页面
-                      if "challenges" in self.page.url:
+                      if "verify you are human" in self.page.html.lower():
                           print("仍未通过 Cloudflare 验证")
                           return False
                       print("Cloudflare 验证通过")
                       return True
-                  except Exception as e:
-                      print(f"处理 Cloudflare 失败: {str(e)}")
-                      return False
-                  finally:
-                      self.page.frame.to_main()
+                  else:
+                      print("未检测到 Cloudflare 验证，可能是目标页面")
+                      return True
 
               def get_cookies(self):
                   success = False
@@ -115,9 +117,8 @@ jobs:
                       sleep(5)  # 初始加载等待
 
                       # 处理 Cloudflare
-                      if "challenges" in self.page.url or "verify" in self.page.html.lower():
-                          if not self.handle_cloudflare():
-                              raise Exception("无法通过 Cloudflare 验证")
+                      if not self.handle_cloudflare():
+                          raise Exception("无法通过 Cloudflare 验证")
 
                       sleep(10)  # 等待页面跳转
                       print(f"最终 URL: {self.page.url}")
