@@ -99,7 +99,7 @@ jobs:
                       if not cookies:
                           print("未获取到任何 cookies")
                           return False
-                      cookie_str = "\n".join([f"{c[\"name\"]}={c[\"value\"]}" for c in cookies])
+                      cookie_str = "\n".join([c["name"] + "=" + c["value"] for c in cookies])  # 避免 f-string 中的反斜杠
                       print(f"获取到的 cookies:\n{cookie_str}")
                       Path("serv00_cookies.txt").write_text(cookie_str)
                       return True
