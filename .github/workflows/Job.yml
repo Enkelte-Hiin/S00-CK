@@ -1,4 +1,4 @@
-name: CF Interactive Crawler
+name: Serv00 CF Cookie Crawler
 
 on:
   schedule:
@@ -8,6 +8,7 @@ on:
 jobs:
   crawl:
     runs-on: ubuntu-latest
+    timeout-minutes: 10  # 增加超时时间
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -19,8 +20,8 @@ jobs:
 
     - name: Install dependencies
       run: |
-        sudo apt-get install -y libgbm-dev
-        pip install drissionpage
+        sudo apt-get install -y libgbm-dev wget unzip
+        pip install drissionpage websocket-client
 
     - name: Install Chromium
       uses: browser-actions/setup-chromium@v1
@@ -29,7 +30,7 @@ jobs:
 
     - name: Run crawler
       env:
-        CF_SITE_URL: ${{ secrets.CF_SITE_URL }}
+        SERV00_URL: "https://www.serv00.com/offer/create_new_account"
       run: |
         python - <<EOF
         import os
@@ -37,71 +38,82 @@ jobs:
         from DrissionPage import ChromiumPage
         from pathlib import Path
 
-        def handle_cf_challenge(page):
-            # 识别验证框架
-            challenge_frame = page('iframe[src*="challenge"]', timeout=10)
-            if challenge_frame:
-                page.wait.ele_displayed(challenge_frame)
-                page.switch_to.frame(challenge_frame)
+        class Serv00Crawler:
+            def __init__(self):
+                self.page = ChromiumPage(
+                    headless=True,
+                    no_imgs=True,
+                    download_media=False,
+                    driver_options={
+                        'arguments': [
+                            '--disable-blink-features=AutomationControlled',
+                            '--lang=en-US',
+                            '--disable-popup-blocking'
+                        ]
+                    }
+                )
+                self.page.set.user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
                 
-                # 点击验证按钮
-                verify_btn = page('#cf-stage', timeout=10)
-                if verify_btn:
-                    verify_btn.click()
-                    print("Clicked verify button")
-                    
-                    # 等待验证完成（根据实际情况调整）
-                    page.wait(15)
-                    page.switch_to.main_frame()
-                    
-                    # 检查是否出现二级验证
-                    if page('div#cf-please-wait', timeout=5).ele_exists():
-                        print("Detected secondary challenge")
-                        page('div#cf-please-wait').wait.disappear(timeout=120)
-                    return True
-                return False
-            return False
-
-        def get_cf_cookies():
-            page = ChromiumPage(
-                headless=True,
-                no_imgs=True,
-                # 反检测配置
-                driver_options={
-                    'arguments': [
-                        '--disable-blink-features=AutomationControlled',
-                        '--disable-infobars'
-                    ]
-                }
-            )
-            
-            # 设置User-Agent
-            page.set.user_agent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-            
-            page.get(os.environ['CF_SITE_URL'])
-            
-            # 处理验证流程
-            if page.title in ['Just a moment...', 'Please Wait...']:
-                if handle_cf_challenge(page):
-                    print("Challenge solved")
-                else:
-                    print("Failed to solve challenge")
+            def handle_cloudflare(self):
+                # 等待验证框架加载
+                if not self.page.wait.ele_loaded('iframe[src*="challenge"]', timeout=15):
                     return False
                 
-            # 获取最终cookies
-            cookies = page.cookies
-            cookie_str = '\n'.join([f"{c['name']}={c['value']}" for c in cookies])
-            
-            Path('cf_cookies.txt').write_text(cookie_str)
-            page.quit()
-            return True
+                # 切换到验证框架
+                challenge_frame = self.page('iframe[src*="challenge"]')
+                self.page.switch_to.frame(challenge_frame)
+                
+                try:
+                    # 识别并点击验证按钮
+                    verify_btn = self.page('#cf-stage')
+                    verify_btn.click()
+                    print("点击验证按钮成功")
+                    
+                    # 等待主页面加载完成
+                    self.page.switch_to.main_frame()
+                    self.page.wait.load_start()
+                    
+                    # 检测是否出现二次验证
+                    if self.page('div#cf-please-wait', timeout=5).ele_exists():
+                        print("检测到二次验证，等待完成...")
+                        self.page('div#cf-please-wait').wait.disappear(timeout=180)
+                    
+                    return True
+                except Exception as e:
+                    print(f"验证处理失败: {str(e)}")
+                    return False
+
+            def get_cookies(self):
+                try:
+                    self.page.get(os.environ['SERV00_URL'])
+                    
+                    # 处理可能的跳转验证
+                    if "challenges" in self.page.url:
+                        print("检测到验证页面重定向")
+                        if not self.handle_cloudflare():
+                            raise Exception("无法完成验证")
+                    
+                    # 等待目标页面加载
+                    self.page.wait.ele_loaded('input[name="username"]', timeout=30)
+                    
+                    # 保存cookies
+                    cookies = self.page.cookies
+                    cookie_str = '\n'.join([f"{c['name']}={c['value']}" for c in cookies])
+                    Path('serv00_cookies.txt').write_text(cookie_str)
+                    return True
+                finally:
+                    self.page.quit()
 
         if __name__ == '__main__':
-            get_cf_cookies()
+            crawler = Serv00Crawler()
+            if crawler.get_cookies():
+                print("Cookie获取成功")
+            else:
+                raise Exception("Cookie获取失败")
         EOF
 
     - name: Upload cookies
       uses: actions/upload-artifact@v3
       with:
-        name: cf-cookies
-        path: cf_cookies.txt
+        name: serv00-cookies
+        path: serv00_cookies.txt
