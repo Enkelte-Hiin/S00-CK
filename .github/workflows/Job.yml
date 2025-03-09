@@ -54,7 +54,7 @@ jobs:
                   options.set_argument("--disable-popup-blocking")
                   options.set_argument("--no-sandbox")
                   options.set_argument("--disable-dev-shm-usage")
-                  options.set_argument("--window-size=1920,1080")  # 伪装窗口大小
+                  options.set_argument("--window-size=1920,1080")
                   options.set_user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
                   self.page = ChromiumPage(addr_or_opts=options)
 
@@ -62,34 +62,35 @@ jobs:
                   print(f"当前 URL: {self.page.url}")
                   html_content = self.page.html.lower()
 
-                  # 检查页面是否包含 Cloudflare 验证标志
-                  if "verify you are human" in html_content or "cloudflare" in html_content:
-                      print("检测到 Cloudflare 验证，开始处理...")
+                  # 检查是否为 Cloudflare/Turnstile 验证页面
+                  if "verify you are human" in html_content or "cloudflare" in html_content or "cf-turnstile" in html_content:
+                      print("检测到 Cloudflare/Turnstile 验证，开始处理...")
 
-                      # 直接在主页面寻找 checkbox
-                      checkbox = self.page.ele("xpath://input[@type='checkbox']", timeout=20)
+                      # 尝试定位可见的 checkbox
+                      checkbox = self.page.ele("xpath://input[@type='checkbox' and not(@type='hidden')]", timeout=20)
                       if not checkbox:
-                          print("未找到 checkbox，尝试备用选择器...")
-                          checkbox = self.page.ele("css:input", timeout=10)
+                          print("未找到可见 checkbox，尝试备用选择器...")
+                          checkbox = self.page.ele("xpath://label[contains(text(), 'Verify you are human')]/input", timeout=20)
 
                       if checkbox:
                           print(f"找到 checkbox: {checkbox.attrs}")
-                          if checkbox.visible:
-                              # 尝试直接点击
-                              checkbox.click()
-                              print("通过常规方法点击 checkbox")
-                              sleep(2)  # 等待点击生效
-                              # 如果常规点击无效，尝试 JavaScript 点击
-                              if "verify you are human" in self.page.html.lower():
-                                  print("常规点击可能无效，尝试 JavaScript 点击...")
+                          try:
+                              # 检查可见性并点击
+                              if hasattr(checkbox, 'visible') and checkbox.visible:
+                                  checkbox.click()
+                                  print("通过常规方法点击 checkbox")
+                              else:
+                                  print("checkbox 不可见，尝试 JavaScript 点击...")
                                   self.page.run_js("arguments[0].click();", checkbox)
                                   print("通过 JavaScript 点击 checkbox")
                               sleep(5)  # 等待验证完成
-                          else:
-                              print("checkbox 不可见，无法点击")
-                              return False
+                          except AttributeError:
+                              print("checkbox 无 visible 属性，跳过可见性检查")
+                              self.page.run_js("arguments[0].click();", checkbox)
+                              print("通过 JavaScript 点击 checkbox")
+                              sleep(5)
                       else:
-                          print("未找到任何 checkbox")
+                          print("未找到任何可点击的 checkbox")
                           return False
 
                       # 等待验证完成
@@ -101,12 +102,12 @@ jobs:
 
                       # 检查是否仍停留在挑战页面
                       if "verify you are human" in self.page.html.lower():
-                          print("仍未通过 Cloudflare 验证")
+                          print("仍未通过 Cloudflare/Turnstile 验证")
                           return False
-                      print("Cloudflare 验证通过")
+                      print("Cloudflare/Turnstile 验证通过")
                       return True
                   else:
-                      print("未检测到 Cloudflare 验证，可能是目标页面")
+                      print("未检测到 Cloudflare/Turnstile 验证，可能是目标页面")
                       return True
 
               def get_cookies(self):
@@ -116,9 +117,9 @@ jobs:
                       print(f"初始 URL: {self.page.url}")
                       sleep(5)  # 初始加载等待
 
-                      # 处理 Cloudflare
+                      # 处理 Cloudflare/Turnstile
                       if not self.handle_cloudflare():
-                          raise Exception("无法通过 Cloudflare 验证")
+                          raise Exception("无法通过 Cloudflare/Turnstile 验证")
 
                       sleep(10)  # 等待页面跳转
                       print(f"最终 URL: {self.page.url}")
