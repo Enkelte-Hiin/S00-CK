@@ -113,7 +113,7 @@ jobs:
         EOF
 
     - name: Upload cookies
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: serv00-cookies
         path: serv00_cookies.txt
