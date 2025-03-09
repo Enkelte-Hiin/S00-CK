@@ -5,67 +5,43 @@ on:
 
 jobs:
   bypass:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04  # 直接使用GitHub托管环境
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Run in Docker
-      uses: addnab/docker-run-action@v3
-      with:
-        image: ubuntu:22.04
-        options: >-
-          -v ${{ github.workspace }}:/app
-          -w /app
-          --privileged
-          -e DISPLAY=:99
-        run: |
-          # ================== 系统依赖 ==================
-          apt-get update -y
-          apt-get install -y \
-            chromium-browser \
-            chromium-chromedriver \
-            xvfb \
-            tesseract-ocr \
-            libgl1-mesa-glx \
-            libnss3 \
-            libxcomposite1 \
-            libxdamage1 \
-            libxrandr2 \
-            libgbm1 \
-            libasound2 \
-            libpango-1.0-0 \
-            libcairo2 \
-            libatk1.0-0 \
-            libatk-bridge2.0-0 \
-            libdrm2 \
-            libwayland-client0 \
-            libxkbcommon0 \
-            python3.10 \
-            python3.10-venv
+    - name: 安装系统依赖
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y \
+          xvfb \
+          chromium-browser \
+          chromium-chromedriver \
+          tesseract-ocr \
+          libgl1-mesa-glx \
+          libnss3 \
+          libxcomposite1 \
+          libxdamage1 \
+          libxrandr2 \
+          libgbm1 \
+          libasound2 \
+          libpango-1.0-0 \
+          libcairo2
 
-          # ================== 浏览器配置 ==================
-          ln -sf /usr/bin/chromium-browser /usr/bin/google-chrome
-          chmod 755 /usr/lib/chromium-browser/chromedriver
-          ln -sf /usr/lib/chromium-browser/chromedriver /usr/local/bin/chromedriver
+    - name: 配置Python环境
+      run: |
+        python3.10 -m venv venv
+        source venv/bin/activate
+        pip install --no-cache-dir \
+          undetected-chromedriver==3.5.5 \
+          selenium==4.15.2 \
+          opencv-python-headless==4.8.1.78 \
+          numpy==1.26.4 \
+          pytesseract==0.3.10
 
-          # ================== Python环境 ==================
-          python3.10 -m venv /opt/venv
-          . /opt/venv/bin/activate
-          pip install --no-cache-dir \
-            undetected-chromedriver==3.5.5 \
-            selenium==4.15.2 \
-            opencv-python-headless==4.8.1.78 \
-            numpy==1.26.4 \
-            pytesseract==0.3.10
-
-          # ================== 清理缓存 ==================
-          rm -rf ~/.cache/chromium
-          rm -rf ~/.local/share/undetected_chromedriver
-
-          # ================== 启动服务 ==================
-          Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset &
-          sleep 5
-
-          # ================== 执行脚本 ==================
-          python3.10 S00_CK.py
+    - name: 执行脚本
+      run: |
+        Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset &
+        sleep 5
+        source venv/bin/activate
+        python3.10 S00_CK.py
