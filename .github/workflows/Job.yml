@@ -51,53 +51,63 @@ jobs:
                   self.page = ChromiumPage(addr_or_opts=options)
 
               def handle_cloudflare(self):
-                  """ 处理 Cloudflare 验证 """
+                  """ 处理 Cloudflare 五秒盾验证 """
+                  # 检查是否出现 Cloudflare 挑战 iframe
                   if not self.page.ele('iframe[src*="challenge"]', timeout=15):
-                      return False
+                      print("未检测到 Cloudflare 挑战")
+                      return True  # 没有挑战，直接返回成功
 
-                  # 切换到 Cloudflare 挑战 iframe
+                  print("检测到 Cloudflare 五秒盾，开始处理...")
+
+                  # 切换到 Cloudflare iframe
                   challenge_frame = self.page.ele('iframe[src*="challenge"]')
                   if challenge_frame:
                       self.page.frame.to_frame(challenge_frame)
 
                   try:
-                      verify_btn = self.page.ele('#cf-stage')
-                      if verify_btn:
-                          verify_btn.click()
-                          print("点击 Cloudflare 验证按钮成功")
+                      # 尝试找到并点击验证码 checkbox
+                      checkbox = self.page.ele('input[type="checkbox"]', timeout=10)
+                      if checkbox:
+                          checkbox.click()
+                          print("点击验证码 checkbox 成功")
+                      else:
+                          print("未找到验证码 checkbox")
 
+                      # 返回主框架并等待页面跳转
                       self.page.frame.to_main()
                       self.page.wait.load_start()
 
-                      wait_elem = self.page.ele('div#cf-please-wait', timeout=5)
+                      # 等待可能的二次验证或页面加载完成
+                      wait_elem = self.page.ele('div#cf-please-wait', timeout=10)
                       if wait_elem:
                           print("检测到二次验证，等待完成...")
-                          wait_elem.wait.disappear(timeout=180)
+                          wait_elem.wait.disappear(timeout=30)
 
+                      # 确保跳转到原始网页
+                      sleep(5)  # 额外等待5秒，确保页面加载完成
                       return True
                   except Exception as e:
-                      print(f"验证失败: {str(e)}")
+                      print(f"Cloudflare 验证失败: {str(e)}")
                       return False
+                  finally:
+                      self.page.frame.to_main()
 
               def get_cookies(self):
                   """ 获取目标网站的 cookies """
                   try:
                       self.page.get("https://www.serv00.com/offer/create_new_account")
+                      print(f"当前 URL: {self.page.url}")
 
                       # 处理可能的 Cloudflare 验证
                       if "challenges" in self.page.url:
-                          print("检测到 Cloudflare 验证")
                           if not self.handle_cloudflare():
                               raise Exception("无法完成 Cloudflare 验证")
-
-                      # 确保页面加载完成并检查元素
-                      if not self.page.ele('input[name="username"]', timeout=30):
-                          raise Exception("页面未找到 'username' 输入框")
 
                       # 提取 cookies 并保存
                       cookies = self.page.cookies()
                       cookie_str = '\n'.join([f"{c['name']}={c['value']}" for c in cookies])
                       Path('serv00_cookies.txt').write_text(cookie_str)
+                      print(f"获取到的 cookies:\n{cookie_str}")
 
                       return True
                   finally:
