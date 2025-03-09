@@ -1,98 +1,81 @@
-import os
-import time
+import undetected_chromedriver as uc
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.action_chains import ActionChains
 import cv2
 import numpy as np
+import time
 import pytesseract
 from PIL import Image
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.chrome.options import Options
+import os
 
-# 配置文件路径
-TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), 'image.jpg')
-SCREENSHOT_PATH = '/tmp/screenshot.png'
-
-def preprocess_image(image_path):
-    """图像预处理增强匹配精度"""
-    img = cv2.imread(image_path)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    img = cv2.GaussianBlur(img, (5,5), 0)
-    return img
-
-def find_verify_position():
-    """通过模板匹配定位验证框"""
-    screenshot = preprocess_image(SCREENSHOT_PATH)
-    template = preprocess_image(TEMPLATE_PATH)
+def locate_verify_button(screenshot_path='screenshot.png', template_path='image.jpg'):
+    # 图像预处理
+    screenshot = cv2.imread(screenshot_path)
+    template = cv2.imread(template_path)
     
-    # 多尺度模板匹配
-    found = None
-    for scale in np.linspace(0.8, 1.2, 5):
-        resized = cv2.resize(template, (0,0), fx=scale, fy=scale)
-        result = cv2.matchTemplate(screenshot, resized, cv2.TM_CCOEFF_NORMED)
-        _, max_val, _, max_loc = cv2.minMaxLoc(result)
-        if found is None or max_val > found[0]:
-            found = (max_val, max_loc, resized.shape)
+    # 灰度化提升匹配速度
+    screenshot_gray = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
+    template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
     
-    if found and found[0] > 0.7:  # 匹配阈值
-        (_, max_loc, (h, w)) = found
-        x = max_loc[0] + w//2
-        y = max_loc[1] + h//2
-        return (x, y)
-    return None
-
-def check_success():
-    """OCR验证成功文本"""
-    img = Image.open(SCREENSHOT_PATH)
-    # 截取右下角区域（假设成功提示在此区域）
-    region = img.crop((img.width//2, img.height-100, img.width, img.height))
-    text = pytesseract.image_to_string(region, config='--psm 6')
-    return any(kw in text.lower() for kw in ['success', 'verified', 'passed'])
+    # 模板匹配
+    res = cv2.matchTemplate(screenshot_gray, template_gray, cv2.TM_CCOEFF_NORMED)
+    threshold = 0.7  # 根据实际调整
+    loc = np.where(res >= threshold)
+    
+    if len(loc[0]) == 0:
+        return None
+    
+    # 取第一个匹配点
+    x, y = loc[1][0], loc[0][0]
+    w, h = template_gray.shape[::-1]
+    center_x = x + w // 2
+    center_y = y + h // 2
+    return (center_x, center_y)
 
 def main():
-    # 配置无头浏览器
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
+    options = uc.ChromeOptions()
+    options.add_argument('--headless')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--disable-blink-features=AutomationControlled')
     
-    driver = webdriver.Chrome(options=chrome_options)
+    driver = uc.Chrome(options=options)
     try:
-        driver.get("https://www.serv00.com/offer/create_new_account")
-        time.sleep(8)  # 等待页面完全加载
+        driver.get('https://www.serv00.com/offer/create_new_account')
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.TAG_NAME, 'body'))
         
-        # 首次截图匹配验证框
-        driver.save_screenshot(SCREENSHOT_PATH)
-        button_pos = find_verify_position()
+        # 截取初始页面
+        driver.save_screenshot('screenshot.png')
+        
+        # 定位验证按钮
+        button_pos = locate_verify_button()
         if not button_pos:
-            raise Exception("验证框定位失败")
-
-        # 精确点击
-        action = ActionChains(driver)
+            raise Exception("Turnstile验证框未找到")
+        
+        # 精确点击验证框
         body = driver.find_element(By.TAG_NAME, 'body')
+        action = ActionChains(driver)
         action.move_to_element_with_offset(body, button_pos[0], button_pos[1]).click().perform()
         
-        # 等待并验证结果
-        success = False
-        for _ in range(15):
-            time.sleep(1)
-            driver.save_screenshot(SCREENSHOT_PATH)
-            if check_success():
-                success = True
-                break
+        # 等待验证通过并检查结果
+        WebDriverWait(driver, 15).until(
+            lambda d: 'Create an account' in d.page_source
+        )
         
-        if not success:
-            raise Exception("验证未通过")
-        
-        # 获取Cookie（实际需根据目标网站调整）
+        # 验证成功后获取Cookie
         cookies = driver.get_cookies()
-        print("##[set-output name=cookies;]%s" % cookies)
-        return 0
+        print(f"成功获取Cookie: {cookies}")
+        return cookies
+        
     except Exception as e:
-        print(f"##[error] {str(e)}")
-        return 1
+        print(f"运行失败: {str(e)}")
+        driver.save_screenshot('error.png')  # 保存错误截图
+        return None
     finally:
         driver.quit()
 
 if __name__ == "__main__":
-    exit(main())
+    main()
