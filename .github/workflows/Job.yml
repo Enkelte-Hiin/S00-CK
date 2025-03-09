@@ -11,6 +11,9 @@ on:
 jobs:
   run-python-script:
     runs-on: ubuntu-latest
+    env:
+      pythonLocation: /opt/hostedtoolcache/Python/3.10.16/x64
+      LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.10.16/x64/lib
 
     steps:
       - name: 检出代码仓库
@@ -29,8 +32,9 @@ jobs:
           pip install DrissionPage
 
       - name: 运行 Python 脚本
+        shell: /usr/bin/bash -e {0}
         run: |
-          python -c '
+          python - <<EOF
           import os
           import re
           from time import sleep
@@ -87,19 +91,19 @@ jobs:
                       if "challenges" in self.page.url:
                           if not self.handle_cloudflare():
                               raise Exception("无法完成 Cloudflare 验证")
-                      self.page.wait.load_complete(timeout=20)
+                      sleep(10)  # 等待页面加载
                       html_content = self.page.html
                       print(f"页面内容长度: {len(html_content)} 字节")
                       if re.search(r"Create an account", html_content):
-                          print("成功跳转到目标页面，找到 \"Create an account\"")
+                          print("成功跳转到目标页面，找到 'Create an account'")
                       else:
-                          print("未找到 \"Create an account\"，可能未跳转到目标页面")
+                          print("未找到 'Create an account'，可能未跳转到目标页面")
                           return False
                       cookies = self.page.cookies()
                       if not cookies:
                           print("未获取到任何 cookies")
                           return False
-                      cookie_str = "\n".join([c["name"] + "=" + c["value"] for c in cookies])  # 避免 f-string 中的反斜杠
+                      cookie_str = "\n".join([c["name"] + "=" + c["value"] for c in cookies])
                       print(f"获取到的 cookies:\n{cookie_str}")
                       Path("serv00_cookies.txt").write_text(cookie_str)
                       return True
@@ -115,7 +119,7 @@ jobs:
                   print("Cookie 获取成功")
               else:
                   raise Exception("Cookie 获取失败")
-          '
+          EOF
 
       - name: 上传 Cookies 文件
         if: always()
