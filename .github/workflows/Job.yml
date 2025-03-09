@@ -16,14 +16,17 @@ jobs:
       LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.10.16/x64/lib
 
     steps:
+      # 1. 检出代码仓库
       - name: 检出代码仓库
         uses: actions/checkout@v2
 
+      # 2. 设置 Python 3.10
       - name: 设置 Python 3.10
         uses: actions/setup-python@v2
         with:
           python-version: '3.10'
 
+      # 3. 安装依赖
       - name: 安装依赖
         run: |
           sudo apt-get update
@@ -31,6 +34,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install DrissionPage
 
+      # 4. 运行 Python 脚本
       - name: 运行 Python 脚本
         shell: /usr/bin/bash -e {0}
         run: |
@@ -53,27 +57,32 @@ jobs:
                   self.page = ChromiumPage(addr_or_opts=options)
 
               def handle_cloudflare(self):
-                  if not self.page.ele("iframe[src*=\"challenge\"]", timeout=15):
-                      print("未检测到 Cloudflare 挑战")
+                  print(f"当前 URL: {self.page.url}")
+                  iframe = self.page.ele("iframe[src*=\"challenge\"]", timeout=20)
+                  if not iframe:
+                      print("未检测到 Cloudflare 挑战iframe，可能已通过或页面未加载")
                       return True
+
                   print("检测到 Cloudflare 五秒盾，开始处理...")
-                  challenge_frame = self.page.ele("iframe[src*=\"challenge\"]")
-                  if challenge_frame:
-                      self.page.frame.to_frame(challenge_frame)
+                  self.page.frame.to_frame(iframe)
                   try:
-                      checkbox = self.page.ele("input[type=\"checkbox\"]", timeout=10)
-                      if checkbox:
+                      checkbox = self.page.ele("@type=checkbox", timeout=15) or self.page.ele("input", timeout=15)
+                      if checkbox and checkbox.visible:
+                          print(f"找到验证码 checkbox: {checkbox}")
                           checkbox.click()
                           print("点击验证码 checkbox 成功")
                       else:
-                          print("未找到验证码 checkbox")
+                          print("未找到可点击的验证码 checkbox")
+                          return False
+
                       self.page.frame.to_main()
                       self.page.wait.load_start()
-                      wait_elem = self.page.ele("div#cf-please-wait", timeout=10)
+                      wait_elem = self.page.ele("div#cf-please-wait", timeout=15)
                       if wait_elem:
                           print("检测到二次验证，等待完成...")
-                          wait_elem.wait.disappear(timeout=30)
-                      sleep(5)
+                          wait_elem.wait.disappear(timeout=60)
+                          sleep(5)
+
                       if "challenges" in self.page.url:
                           print("仍处于 Cloudflare 挑战页面")
                           return False
@@ -88,30 +97,37 @@ jobs:
                   success = False
                   try:
                       self.page.get("https://www.serv00.com/offer/create_new_account")
-                      print(f"当前 URL: {self.page.url}")
+                      print(f"初始 URL: {self.page.url}")
+                      sleep(5)
                       if "challenges" in self.page.url:
                           if not self.handle_cloudflare():
                               raise Exception("无法完成 Cloudflare 验证")
-                      sleep(10)  # 等待页面加载
+
+                      sleep(10)
+                      print(f"最终 URL: {self.page.url}")
                       html_content = self.page.html
                       print(f"页面内容长度: {len(html_content)} 字节")
-                      # 保存截图
+
                       screenshot_path = Path("screenshot.png")
                       try:
                           self.page.get_screenshot(path=str(screenshot_path))
                           print(f"已保存页面截图到: {screenshot_path}")
                       except Exception as e:
                           print(f"截图失败: {str(e)}")
-                      # 检查页面内容
-                      if re.search(r"Create an account", html_content):
+
+                      Path("page_content.html").write_text(html_content)
+
+                      if re.search(r"Create an account", html_content, re.IGNORECASE):
                           print("成功跳转到目标页面，找到 'Create an account'")
                       else:
                           print("未找到 'Create an account'，可能未跳转到目标页面")
                           return False
+
                       cookies = self.page.cookies()
                       if not cookies:
                           print("未获取到任何 cookies")
                           return False
+
                       cookie_str = "\n".join([c["name"] + "=" + c["value"] for c in cookies])
                       print(f"获取到的 cookies:\n{cookie_str}")
                       Path("serv00_cookies.txt").write_text(cookie_str)
@@ -122,7 +138,6 @@ jobs:
                       return False
                   finally:
                       if not success:
-                          # 即使失败，也保存当前 HTML 内容以供调试
                           Path("page_content.html").write_text(self.page.html)
                       self.page.quit()
 
@@ -134,6 +149,7 @@ jobs:
                   raise Exception("Cookie 获取失败")
           EOF
 
+      # 5. 上传结果文件
       - name: 上传 Cookies 文件和截图
         if: always()
         uses: actions/upload-artifact@v4
