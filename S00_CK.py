@@ -87,7 +87,7 @@ def cloudflare_bypass():
         logger.info("页面截图已保存")
         
         # 定位验证框
-        template_path = 'verify_template.png'  # 需提前准备的模板图片
+        template_path = 'image.jpg'  # 需提前准备的模板图片
         click_position = find_verify_position(screenshot_path, template_path)
         
         if not click_position:
