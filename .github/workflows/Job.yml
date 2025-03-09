@@ -82,7 +82,7 @@ jobs:
               def get_cookies(self):
                   """ 获取目标网站的 cookies """
                   try:
-                      self.page.get(os.environ['SERV00_URL'])
+                      self.page.get("https://www.serv00.com/offer/create_new_account")
 
                       # 处理可能的 Cloudflare 验证
                       if "challenges" in self.page.url:
