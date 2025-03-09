@@ -5,7 +5,7 @@ on:
 
 jobs:
   bypass:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04  # 指定使用稳定版 Ubuntu 22.04
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -17,21 +17,10 @@ jobs:
 
     - name: Install system dependencies
       run: |
-        # 启用 universe 仓库
-        sudo add-apt-repository -y universe
-        sudo apt-get update -y
-        
-        # 安装核心依赖
+        sudo apt-get update
         sudo apt-get install -y \
           xvfb \
-          libgl1 \ 
-          libglx0 \
-          libxkbcommon0 \
-          libx11-xcb1 \
-          libgles2 \
-          libegl1 \
-          libgbm1 \
-          libasound2 \
+          libgl1-mesa-glx \  # Ubuntu 22.04 标准包名
           tesseract-ocr \
           tesseract-ocr-eng
 
