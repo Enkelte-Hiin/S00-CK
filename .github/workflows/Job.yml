@@ -5,48 +5,17 @@ on:
 
 jobs:
   bypass:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
+    - name: Run with Chrome Docker
+      uses: addnab/docker-run-action@v3
       with:
-        python-version: '3.10'
-
-    - name: Fix Ubuntu sources
-      run: |
-        # 清除所有软件源配置
-        sudo rm -rf /etc/apt/sources.list.d/*
-        # 使用阿里云镜像源
-        echo "deb http://mirrors.aliyun.com/ubuntu/ jammy main restricted universe multiverse" | sudo tee /etc/apt/sources.list
-        echo "deb http://mirrors.aliyun.com/ubuntu/ jammy-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list
-        echo "deb http://mirrors.aliyun.com/ubuntu/ jammy-security main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list
-        sudo apt-get update -y
-
-    - name: Install core dependencies
-      run: |
-        # 安装基础工具
-        sudo apt-get install -y software-properties-common
-        # 安装关键依赖
-        sudo apt-get install -y \
-          xvfb \
-          libgl1-mesa-glx \
-          libxkbcommon0 \
-          tesseract-ocr \
-          tesseract-ocr-eng
-
-    - name: Install Python packages
-      run: |
-        pip install undetected-chromedriver selenium opencv-python-headless pytesseract pillow
-
-    - name: Start Xvfb
-      run: Xvfb :99 -screen 0 1920x1080x24 &
-
-    - name: Run script
-      env:
-        DISPLAY: :99
-        UC_TELEMETRY: "no"
-      run: |
-        python S00_CK.py
+        image: seleniarm/standalone-chromium:120.0  # 指定稳定版本
+        options: -v ${{ github.workspace }}:/app -w /app
+        run: |
+          apt-get update && apt-get install -y tesseract-ocr
+          pip install undetected-chromedriver pytesseract opencv-python-headless
+          python S00_CK.py
