@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 def validate_environment():
     """环境验证"""
     checks = [
-        (os.path.exists(CHROME_PATH), 
+        (os.path.exists(CHROME_PATH)), 
         (os.path.exists(TEMPLATE_PATH))
     ]
     if not all(checks):
