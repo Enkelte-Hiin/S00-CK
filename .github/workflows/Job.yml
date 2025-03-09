@@ -31,20 +31,20 @@ jobs:
           python - <<EOF
           import os
           from time import sleep
-          from DrissionPage import ChromiumPage, SessionOptions
+          from DrissionPage import ChromiumPage, ChromiumOptions
           from pathlib import Path
 
           class Serv00Crawler:
               def __init__(self):
                   # 设置浏览器选项
-                  options = SessionOptions()
+                  options = ChromiumOptions()
                   options.set_argument('--headless=new')
                   options.set_argument('--disable-blink-features=AutomationControlled')
                   options.set_argument('--lang=en-US')
                   options.set_argument('--disable-popup-blocking')
 
                   # 初始化浏览器
-                  self.page = ChromiumPage(session_options=options)
+                  self.page = ChromiumPage(addr_or_opts=options)
                   self.page.set_user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
 
               def handle_cloudflare(self):
