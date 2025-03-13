@@ -23,6 +23,14 @@ class CFBypasser:
         options.set_argument('--disable-blink-features=AutomationControlled')  # 隐藏自动化标志
         options.set_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')  # 设置用户代理
         
+        # 设置请求头
+        headers = {
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Sec-CH-UA-Platform': '"Windows"'
+        }
+        for header, value in headers.items():
+            options.set_argument(f'--header={header}:{value}')
+        
         # 如果是无头模式，添加 --headless 参数
         if self.headless:
             options.set_argument('--headless')
@@ -30,16 +38,12 @@ class CFBypasser:
         # 使用配置好的 options 初始化 ChromiumPage
         self.page = ChromiumPage(options)
         
-        # 清除旧 cookie（修复点：使用 clear_cache(cookies=True) 替代 delete_all_cookies()）
+        # 清除旧 cookie
         self.page.clear_cache(cookies=True)
         
-        # 配置页面设置
-        self.page.set_setting('webdriver', 'undefined')
-        self.page.set_headers({
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Sec-CH-UA-Platform': '"Windows"'
-        })
-        
+        # 设置 navigator.webdriver 为 undefined
+        self.page.run_js("Object.defineProperty(navigator, 'webdriver', {get: () => undefined});")
+
         if self.headless:
             self.page.set_window_max()
 
