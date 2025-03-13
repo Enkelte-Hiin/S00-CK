@@ -1,15 +1,21 @@
-# .github/workflows/cf_test.yml
-name: Cloudflare Test
+# .github/workflows/serv00_auto.yml
+name: Serv00 Account Creator
 
 on:
   workflow_dispatch:
+    inputs:
+      debug_mode:
+        description: '启用调试模式 (true/false)'
+        required: false
+        default: 'false'
 
 jobs:
-  test_cf:
+  account_creation:
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
     
     steps:
-    - name: Checkout code
+    - name: Checkout repository
       uses: actions/checkout@v4
 
     - name: Set up Python
@@ -17,16 +23,24 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Install dependencies
+    - name: Install system dependencies
       run: |
-        sudo apt-get install -y libgbm-dev
-        pip install DrissionPage
+        sudo apt-get update
+        sudo apt-get install -y libgbm-dev libxshmfence-dev
+        
+    - name: Install Python packages
+      run: |
+        pip install DrissionPage==3.3.9 faker==18.11.2
 
-    - name: Run test
-      run: python test_cf.py
+    - name: Run automation
+      run: python S00_CK.py ${{ inputs.debug_mode }}
+      env:
+        HEADLESS_MODE: 'true'
 
-    - name: Upload screenshot
+    - name: Upload artifacts
       uses: actions/upload-artifact@v3
       with:
-        name: cf-screenshot
-        path: screenshot.png
+        name: serv00-screenshots
+        path: |
+          screenshot_*.png
+          debug/*.png
