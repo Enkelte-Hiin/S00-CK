@@ -30,7 +30,7 @@ jobs:
         
     - name: Install Python packages
       run: |
-        pip install DrissionPage==3.3.9 faker==18.11.2
+        pip install DrissionPage==3.2.35 faker==18.11.2
 
     - name: Run automation
       run: python S00_CK.py --url=https://www.serv00.com/offer/create_new_account
