@@ -50,7 +50,7 @@ class CFBypasser:
                 actions = [
                     (random.uniform(0.2, 0.5),  # 移动速度
                     random.randint(3, 7),       # 移动步数
-                    random.randint(30, 70)       # 移动幅度
+                    random.randint(30, 70))       # 移动幅度
                 ]
                 
                 # 生成移动轨迹
