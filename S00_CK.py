@@ -30,16 +30,18 @@ class CFBypasser:
         # 使用配置好的 options 初始化 ChromiumPage
         self.page = ChromiumPage(options)
         
+        # 清除旧 cookie（修复点：使用 clear_cookies() 替代 set.cookie）
+        self.page.clear_cookies()
+        
         # 配置页面设置
-        self.page.set.cookie('', '')  # 清除旧 cookie
-        self.page.set.setting('webdriver', 'undefined')
-        self.page.set.headers({
+        self.page.set_setting('webdriver', 'undefined')
+        self.page.set_headers({
             'Accept-Language': 'en-US,en;q=0.9',
             'Sec-CH-UA-Platform': '"Windows"'
         })
         
         if self.headless:
-            self.page.set.window.max()
+            self.page.set_window_max()
 
     def capture_screen(self, filename):
         """截图并保存"""
@@ -65,7 +67,7 @@ class CFBypasser:
                 
                 start_x = random.randint(0, viewport_size['width']//2)
                 start_y = random.randint(0, viewport_size['height']//2)
-                self.page.mouse.move_to((start_x, start_y))
+                self.page.mouse.move_to(start_x, start_y)
                 
                 for _ in range(actions[1]):
                     offset_x = random.randint(-actions[2], actions[2])
