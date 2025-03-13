@@ -31,9 +31,10 @@ class CFBypasser:
         for header, value in headers.items():
             options.set_argument(f'--header={header}:{value}')
         
-        # 如果是无头模式，添加 --headless 参数
+        # 如果是无头模式，添加 --headless 参数，并设置窗口大小
         if self.headless:
             options.set_argument('--headless')
+            options.set_argument('--window-size=1920,1080')  # 设置窗口大小
         
         # 使用配置好的 options 初始化 ChromiumPage
         self.page = ChromiumPage(options)
@@ -43,9 +44,6 @@ class CFBypasser:
         
         # 设置 navigator.webdriver 为 undefined
         self.page.run_js("Object.defineProperty(navigator, 'webdriver', {get: () => undefined});")
-
-        if self.headless:
-            self.page.set_window_max()
 
     def capture_screen(self, filename):
         """截图并保存"""
