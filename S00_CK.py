@@ -1,135 +1,161 @@
+# S00_CK.py
 import os
-import cv2
-import logging
-import numpy as np
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.action_chains import ActionChains
-import undetected_chromedriver as uc
+import random
+import time
+from DrissionPage import ChromiumPage
+from urllib.parse import urlparse
 
-# ================== 配置常量 ==================
-TEMPLATE_PATH = "image.jpg"
-TARGET_URL = "https://www.serv00.com/offer/create_new_account"
-CHROME_PATH = "/usr/bin/chromium-browser"
-DRIVER_PATH = "/usr/local/bin/chromedriver"
-TIMEOUT = 15
-# =============================================
+class CFBypasser:
+    def __init__(self, headless=True):
+        self.page = None
+        self.headless = headless
+        self.screenshot_dir = "debug_screenshots"
+        os.makedirs(self.screenshot_dir, exist_ok=True)
+        
+    def init_browser(self):
+        """初始化浏览器配置"""
+        self.page = ChromiumPage(flags=[
+            '--no-sandbox',
+            '--disable-gpu',
+            '--disable-dev-shm-usage',
+            '--disable-blink-features=AutomationControlled',
+            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        ])
+        
+        # 指纹伪装
+        self.page.set.cookie('', '')  # 清除旧cookie
+        self.page.set.setting('webdriver', 'undefined')
+        self.page.set.headers({
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Sec-CH-UA-Platform': '"Windows"'
+        })
+        
+        if self.headless:
+            self.page.set.headless(True)
+            self.page.set.window.max()
 
-# 日志配置
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.StreamHandler()]
-)
-logger = logging.getLogger(__name__)
+    def capture_screen(self, filename):
+        """带时间戳的截图"""
+        timestamp = int(time.time())
+        path = f"{self.screenshot_dir}/{timestamp}_{filename}.png"
+        self.page.get_screenshot(path, full_page=True)
+        return path
 
-def validate_environment():
-    """环境验证（硬核版）"""
-    if not os.path.exists(CHROME_PATH):
-        raise FileNotFoundError(f"浏览器路径不存在: {CHROME_PATH}")
-    if not os.path.exists(TEMPLATE_PATH):
-        raise FileNotFoundError(f"模板文件不存在: {TEMPLATE_PATH}")
-    if not os.access(DRIVER_PATH, os.X_OK):
-        raise PermissionError("chromedriver 无执行权限")
-
-def match_template(screenshot_path):
-    """图像匹配（无符号错误版）"""
-    try:
-        # 读取图像
-        screenshot = cv2.imread(screenshot_path, cv2.IMREAD_GRAYSCALE)
-        template = cv2.imread(TEMPLATE_PATH, cv2.IMREAD_GRAYSCALE)
+    def human_interaction(self, retry=3):
+        """模拟人类交互绕过验证"""
+        for attempt in range(retry):
+            try:
+                # 生成随机交互路径
+                viewport_size = self.page.get_window_size()
+                actions = [
+                    (random.uniform(0.2, 0.5),  # 移动速度
+                    random.randint(3, 7),       # 移动步数
+                    random.randint(30, 70)       # 移动幅度
+                ]
+                
+                # 生成移动轨迹
+                start_x = random.randint(0, viewport_size['width']//2)
+                start_y = random.randint(0, viewport_size['height']//2)
+                self.page.mouse.move_to((start_x, start_y))
+                
+                for _ in range(actions[1]):
+                    offset_x = random.randint(-actions[2], actions[2])
+                    offset_y = random.randint(-actions[2], actions[2])
+                    self.page.mouse.move(offset_x, offset_y)
+                    time.sleep(actions[0] + random.uniform(-0.1, 0.1))
+                
+                # 随机点击
+                if random.random() < 0.7:
+                    self.page.mouse.click()
+                    time.sleep(random.uniform(1.5, 3.0))
+                
+                # 检测验证状态
+                if self.check_cf_passed():
+                    return True
+                    
+            except Exception as e:
+                self.capture_screen(f"error_attempt{attempt}")
+                if attempt == retry -1:
+                    raise Exception(f"Human interaction failed: {str(e)}")
         
-        # 模板匹配
-        res = cv2.matchTemplate(screenshot, template, cv2.TM_CCOEFF_NORMED)
-        _, max_val, _, max_loc = cv2.minMaxLoc(res)
-        
-        # 动态阈值
-        threshold = max(0.6, max_val - 0.1)
-        logger.info(f"匹配度: {max_val:.2f} (阈值: {threshold:.2f})")
-        
-        if max_val < threshold:
-            return None
-            
-        # 计算坐标
-        h, w = template.shape
-        return (max_loc[0] + w//2, max_loc[1] + h//2)
-    except Exception as e:
-        logger.error(f"图像处理失败: {str(e)}")
-        return None
-
-def main():
-    """主流程（绝对完整版）"""
-    driver = None
-    try:
-        # 环境验证
-        validate_environment()
-
-        # 浏览器配置
-        options = uc.ChromeOptions()
-        options.add_argument("--headless=new")
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-dev-shm-usage")
-        options.binary_location = CHROME_PATH
-
-        # 启动浏览器
-        driver = uc.Chrome(
-            options=options,
-            driver_executable_path=DRIVER_PATH,
-            version_main=120,
-            use_subprocess=True
-        )
-        
-        # 访问页面
-        logger.info(f"正在访问: {TARGET_URL}")
-        driver.get(TARGET_URL)
-        
-        # 等待加载
-        WebDriverWait(driver, TIMEOUT).until(
-            EC.presence_of_element_located((By.TAG_NAME, "body"))
-        )
-        
-        # 截图匹配
-        screenshot_path = "page.png"
-        driver.save_screenshot(screenshot_path)
-        click_pos = match_template(screenshot_path)
-        
-        if not click_pos:
-            raise RuntimeError("验证框定位失败，请检查image.jpg的精度")
-            
-        # 执行点击
-        body = driver.find_element(By.TAG_NAME, "body")
-        ActionChains(driver)\
-            .move_to_element_with_offset(body, click_pos[0], click_pos[1])\
-            .click()\
-            .pause(1)\
-            .perform()
-        logger.info(f"已点击坐标: {click_pos}")
-        
-        # 验证结果
-        WebDriverWait(driver, TIMEOUT).until(
-            EC.title_contains("Create an account")
-        )
-        logger.info("验证成功")
-        
-        # 获取Cookies
-        cookies = driver.get_cookies()
-        logger.info("获取到Cookies:")
-        for cookie in cookies:
-            logger.info(f"{cookie['name']}: {cookie['value'][:15]}...")
-            
-        return True
-        
-    except Exception as e:
-        logger.error(f"执行失败: {str(e)}")
-        if driver:
-            driver.save_screenshot("error.png")
         return False
-        
-    finally:
-        if driver:
-            driver.quit()
-            logger.info("浏览器已关闭")
 
-if __name__ == "__main__":
-    main()
+    def check_cf_passed(self, timeout=30):
+        """检测Cloudflare验证状态"""
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            # 检测方式1：标题变化
+            current_title = self.page.title.lower()
+            if 'cloudflare' not in current_title and 'challenge' not in current_title:
+                return True
+                
+            # 检测方式2：特定元素消失
+            if not self.page.ele('css:#challenge-form', timeout=2):
+                return True
+                
+            # 检测方式3：请求头验证
+            if 'cf_clearance' in self.page.cookies():
+                return True
+                
+            time.sleep(2)
+            
+        return False
+
+    def get_cookies(self):
+        """获取格式化后的Cookies"""
+        cookies = self.page.cookies()
+        return '; '.join([f"{c['name']}={c['value']}" for c in cookies])
+
+    def bypass_protection(self, url):
+        """主执行流程"""
+        try:
+            self.init_browser()
+            self.page.get(url)
+            self.capture_screen("initial_page")
+            
+            # 等待Cloudflare初始化
+            time.sleep(5 if self.headless else 3)
+            
+            # 自动检测验证类型
+            if self.page.title == 'Just a moment...':
+                # 处理5秒盾
+                time.sleep(5 + random.uniform(1,3))
+                self.capture_screen("pre_jschallenge")
+                
+            elif 'challenge' in self.page.title:
+                # 需要交互验证
+                if not self.human_interaction():
+                    raise Exception("Cloudflare交互验证失败")
+                self.capture_screen("post_challenge")
+                
+            # 最终状态检测
+            if not self.check_cf_passed():
+                raise Exception("Cloudflare验证未通过")
+                
+            # 验证成功后获取Cookie
+            if 'cf_clearance' not in self.page.cookies():
+                raise Exception("未获取到关键Cookie")
+                
+            return self.get_cookies()
+            
+        except Exception as e:
+            self.capture_screen("final_error")
+            raise
+        finally:
+            if self.page:
+                self.page.quit()
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--headless', type=bool, default=True)
+    parser.add_argument('--url', default='https://www.serv00.com/offer/create_new_account')
+    args = parser.parse_args()
+    
+    try:
+        cf = CFBypasser(headless=args.headless)
+        cookies = cf.bypass_protection(args.url)
+        print(f"成功获取Cookies:\n{cookies}")
+    except Exception as e:
+        print(f"失败原因: {str(e)}")
+        exit(1)
