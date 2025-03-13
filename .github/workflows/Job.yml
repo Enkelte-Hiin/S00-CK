@@ -33,9 +33,10 @@ jobs:
         pip install DrissionPage==3.3.9 faker==18.11.2
 
     - name: Run automation
-      run: python S00_CK.py ${{ inputs.debug_mode }}
+      run: python S00_CK.py --url=https://www.serv00.com/offer/create_new_account
       env:
         HEADLESS_MODE: 'true'
+
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
