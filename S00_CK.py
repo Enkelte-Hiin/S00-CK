@@ -30,8 +30,8 @@ class CFBypasser:
         # 使用配置好的 options 初始化 ChromiumPage
         self.page = ChromiumPage(options)
         
-        # 清除旧 cookie（修复点：使用 delete_all_cookies() 替代 clear_cookies()）
-        self.page.delete_all_cookies()
+        # 清除旧 cookie（修复点：使用 clear_cache(cookies=True) 替代 delete_all_cookies()）
+        self.page.clear_cache(cookies=True)
         
         # 配置页面设置
         self.page.set_setting('webdriver', 'undefined')
