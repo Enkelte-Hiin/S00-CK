@@ -1,5 +1,5 @@
-# .github/workflows/serv00_auto.yml
-name: Serv00 Account Creator
+# 更新后的serv00_auto.yml
+name: Serv00 Cookie获取
 
 on:
   workflow_dispatch:
@@ -10,9 +10,9 @@ on:
         default: 'false'
 
 jobs:
-  account_creation:
+  cookie_fetch:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 10
     
     steps:
     - name: Checkout repository
@@ -26,22 +26,35 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libgbm-dev libxshmfence-dev
-        
+        sudo apt-get install -y \
+          libgbm-dev \
+          libxshmfence-dev \
+          libnss3 \
+          libatk1.0-0 \
+          libatk-bridge2.0-0 \
+          libxkbcommon0 \
+          libxcomposite1 \
+          libxdamage1 \
+          libxrandr2 \
+          libgbm1 \
+          libgtk-3-0 \
+          libasound2
+
     - name: Install Python packages
       run: |
-        pip install DrissionPage==3.2.35 faker==18.11.2
+        python -m pip install --upgrade pip
+        pip install DrissionPage==4.0.23
 
     - name: Run automation
-      run: python S00_CK.py --url=https://www.serv00.com/offer/create_new_account
+      run: |
+        mkdir -p debug_screenshots
+        python S00_CK.py --url=https://www.serv00.com/offer/create_new_account
       env:
         HEADLESS_MODE: 'true'
-
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: serv00-screenshots
+        name: cf-screenshots
         path: |
-          screenshot_*.png
-          debug/*.png
+          debug_screenshots/*.png
