@@ -1,47 +1,32 @@
-name: Cloudflare Bypass
+# .github/workflows/cf_test.yml
+name: Cloudflare Test
 
 on:
   workflow_dispatch:
 
 jobs:
-  bypass:
-    runs-on: ubuntu-22.04  # 直接使用GitHub托管环境
+  test_cf:
+    runs-on: ubuntu-latest
+    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: 安装系统依赖
-      run: |
-        sudo apt-get update -y
-        sudo apt-get install -y \
-          xvfb \
-          chromium-browser \
-          chromium-chromedriver \
-          tesseract-ocr \
-          libgl1-mesa-glx \
-          libnss3 \
-          libxcomposite1 \
-          libxdamage1 \
-          libxrandr2 \
-          libgbm1 \
-          libasound2 \
-          libpango-1.0-0 \
-          libcairo2
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
 
-    - name: 配置Python环境
+    - name: Install dependencies
       run: |
-        python3.10 -m venv venv
-        source venv/bin/activate
-        pip install --no-cache-dir \
-          undetected-chromedriver==3.5.5 \
-          selenium==4.15.2 \
-          opencv-python-headless==4.8.1.78 \
-          numpy==1.26.4 \
-          pytesseract==0.3.10
+        sudo apt-get install -y libgbm-dev
+        pip install DrissionPage
 
-    - name: 执行脚本
-      run: |
-        Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset &
-        sleep 5
-        source venv/bin/activate
-        python3.10 S00_CK.py
+    - name: Run test
+      run: python test_cf.py
+
+    - name: Upload screenshot
+      uses: actions/upload-artifact@v3
+      with:
+        name: cf-screenshot
+        path: screenshot.png
