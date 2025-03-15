@@ -52,30 +52,45 @@ def get_patched_browser(headless=True) -> Chromium:
     shutil.rmtree(extension_path)
     return browser
 
+
 def click_turnstile_checkbox(tab, retries=3) -> bool:
     """点击 Turnstile 验证码框并验证结果，支持重试"""
     for attempt in range(retries):
         try:
-            if not tab.wait.eles_loaded("@name=cf-turnstile-response", timeout=10):
+            print(f"尝试 {attempt + 1}")
+            # 等待页面加载完成
+            tab.wait.doc_loaded(timeout=10)
+            
+            # 重新定位 Turnstile 元素
+            solution = tab.ele("@name=cf-turnstile-response", timeout=10)
+            if not solution:
                 raise RuntimeError("未检测到 Turnstile 组件")
-            solution = tab.ele("@name=cf-turnstile-response")
+            
             wrapper = solution.parent()
-            iframe = wrapper.shadow_root.ele("tag:iframe")
+            iframe = wrapper.shadow_root.ele("tag:iframe", timeout=10)
+            if not iframe:
+                raise RuntimeError("未找到 iframe")
+            
             iframe_body = iframe.ele("tag:body").shadow_root
-            checkbox = iframe_body.ele("tag:input", timeout=20)
-            success = iframe_body.ele("@id=success")
+            checkbox = iframe_body.ele("tag:input", timeout=10)
+            if not checkbox:
+                raise RuntimeError("未找到复选框")
+            
+            success = iframe_body.ele("@id=success", timeout=10)
+            if not success:
+                raise RuntimeError("未找到成功元素")
+            
+            # 点击复选框
             checkbox.click()
-            tab.wait.doc_loaded()  # 确保页面加载完成
+            
+            # 等待成功元素显示
             return tab.wait.ele_displayed(success, timeout=5)
-        except PageDisconnectedError as e:
+        except Exception as e:
             print(f"尝试 {attempt + 1} 失败: {e}")
             if attempt < retries - 1:
                 time.sleep(2)  # 等待 2 秒后重试
             else:
-                raise
-        except Exception as e:
-            print(f"发生错误: {e}")
-            raise
+                raise RuntimeError("所有尝试均失败")
 
 if __name__ == "__main__":
     try:
@@ -84,6 +99,8 @@ if __name__ == "__main__":
         tab.get("https://www.serv00.com/offer/create_new_account")
         if click_turnstile_checkbox(tab):
             print("Turnstile 绕过成功")
+            cookies = tab.get_cookies()
+            print("Cookies:", cookies)
         else:
             print("Turnstile 绕过失败")
     except Exception as e:
