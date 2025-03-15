@@ -7,12 +7,12 @@ from DrissionPage import ChromiumPage, ChromiumOptions
 from DrissionPage.errors import ElementNotFoundError, BrowserConnectError
 
 # ======================
-# 新增扩展配置常量定义
+# 扩展配置（保持最新）
 # ======================
 MANIFEST_CONTENT = {
     "manifest_version": 3,
-    "name": "Turnstile Helper Pro",
-    "version": "1.0",
+    "name": "Turnstile Expert",
+    "version": "1.2",
     "content_scripts": [{
         "js": ["content.js"],
         "matches": ["<all_urls>"],
@@ -23,73 +23,63 @@ MANIFEST_CONTENT = {
 }
 
 SCRIPT_CONTENT = """
-// 增强版反检测脚本
-const getParams = () => {
-    const randX = Math.floor(Math.random() * 1200 + 800);
-    const randY = Math.floor(Math.random() * 600 + 400);
-    const renderer = 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3090 Direct3D11 vs_5_0 ps_5_0)';
+// 强化反检测逻辑
+const overrideParams = () => {
+    const randomize = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
     
-    // 覆盖鼠标坐标
+    // 鼠标轨迹参数
     Object.defineProperties(MouseEvent.prototype, {
-        'screenX': { get: () => randX },
-        'screenY': { get: () => randY }
+        'screenX': { get: () => randomize(800, 2000) },
+        'screenY': { get: () => randomize(400, 1200) }
     });
-    
-    // 覆盖WebGL参数
+
+    // WebGL渲染器伪装
     const origGetParameter = WebGLRenderingContext.prototype.getParameter;
     WebGLRenderingContext.prototype.getParameter = function(param) {
-        switch(param) {
-            case 37445: return renderer;
-            case 37446: return 'NVIDIA Corporation';
-            default: return origGetParameter.call(this, param);
-        }
+        const overrides = {
+            37445: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4090)',
+            37446: 'NVIDIA Corporation',
+            7937: 'WebKit'
+        };
+        return overrides[param] || origGetParameter.call(this, param);
     };
 };
 
-document.addEventListener('DOMContentLoaded', getParams, { once: true });
+// 更早执行覆盖
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', overrideParams);
+} else {
+    overrideParams();
+}
 """
 
 # ======================
-# 浏览器扩展创建函数
-# ======================
-def create_extension():
-    """创建临时扩展目录"""
-    temp_dir = tempfile.mkdtemp(prefix='cf_ext_')
-    manifest_path = os.path.join(temp_dir, 'manifest.json')
-    script_path = os.path.join(temp_dir, 'content.js')  # 修正文件名
-    
-    with open(manifest_path, 'w') as f:
-        json.dump(MANIFEST_CONTENT, f, indent=2)
-    
-    with open(script_path, 'w') as f:
-        f.write(SCRIPT_CONTENT.strip())
-    
-    return temp_dir
-
-# ======================
-# 浏览器配置（修复路径问题）
+# 修复浏览器初始化
 # ======================
 def get_browser(headless=True):
-    """配置浏览器实例"""
+    """配置浏览器实例（使用最新API）"""
     co = ChromiumOptions()
+    
+    # 必须参数
     co.set_argument('--no-sandbox')
     co.set_argument('--disable-dev-shm-usage')
-    co.set_argument('--disable-gpu')  # 新增GPU兼容参数
     co.set_argument('--remote-allow-origins=*')
+    co.set_argument('--disable-blink-features=AutomationControlled')
     
-    # GitHub Actions专用路径配置
-    co.set_browser_path('/usr/bin/chromium-browser')
-    co.set_local_port(9222)  # 固定调试端口
+    # GitHub Actions专用配置
+    co.set_browser_path('/usr/bin/chromium')
+    co.set_local_port(9222)
     
     if headless:
         co.headless()
     
-    # 加载扩展
+    # 创建并加载扩展
     ext_dir = create_extension()
     co.add_extension(ext_dir)
     
     try:
-        browser = ChromiumPage(addr_driver_opts=co, timeout=30)  # 延长超时时间
+        # 修正初始化参数名
+        browser = ChromiumPage(addr_or_opts=co, timeout=40)
         browser._temp_dirs = [ext_dir]
         return browser
     except Exception as e:
@@ -97,94 +87,108 @@ def get_browser(headless=True):
         raise
 
 # ======================
-# 增强版验证码处理逻辑
+# 更新元素定位逻辑
 # ======================
 def bypass_turnstile(page, max_retry=3):
-    """执行验证码绕过"""
+    """验证码处理流程（兼容新版API）"""
     for retry in range(1, max_retry+1):
         try:
-            print(f"\n🚀 尝试第 {retry} 次验证")
+            print(f"\n🔄 第 {retry} 次尝试 (v2.1)")
             
-            # 等待核心元素加载
-            page.wait.ele('.cf-turnstile', timeout=30)
+            # 使用智能等待
+            container = page.wait.ele('.cf-turnstile, [data-sitekey]', timeout=30)
             
-            # 执行Shadow DOM查询
-            iframe = page.run_js('''
-                const wrapper = document.querySelector('.cf-turnstile');
-                return wrapper?.shadowRoot?.querySelector('iframe');
+            # 执行JavaScript穿透Shadow DOM
+            iframe = container.run_js('''
+                return this.shadowRoot?.querySelector('iframe') 
+                    || this.querySelector('iframe');
             ''')
             
             if not iframe:
-                raise ElementNotFoundError("验证iframe未找到")
+                page.get_screenshot(f'iframe_error_{retry}.png')
+                raise ElementNotFoundError("验证框架未找到")
             
             # 切换到iframe
             page.frame_to(iframe)
             
-            # 使用混合选择器
-            checkbox = page.wait.ele('xpath://input[@type="checkbox"] | css:input[type="checkbox"]', timeout=20)
-            checkbox.click(by_js=True)
+            # 使用复合选择器定位复选框
+            checkbox = page.wait.ele('''
+                xpath://input[@type="checkbox"] | 
+                css:input[type="checkbox"],
+                css:.checkbox-label
+            ''', timeout=25)
             
-            # 双重验证机制
-            success1 = page.wait.ele('.verifybox-success', timeout=20)
-            success2 = page.wait.ele_text_contains('验证成功', timeout=15)
+            # 使用动作链点击
+            page.actions.click(checkbox)
             
-            if success1 or success2:
-                print("✅ 验证成功")
+            # 多条件验证
+            success = any([
+                page.wait.ele('.verifybox-success', timeout=20),
+                page.wait.ele_text_contains('成功', timeout=15),
+                page.wait.ele_text_contains('verified', timeout=15)
+            ])
+            
+            if success:
+                print("✅ 验证状态确认")
                 return True
             
-            raise ElementNotFoundError("未检测到成功标识")
-
+            # 触发重新验证
+            page.run_js('window.__cfChallengeRan = false;')
+            
         except ElementNotFoundError as e:
-            print(f"⚠️ 元素错误: {str(e)[:80]}")
+            print(f"⚠️ 定位失败: {str(e)[:60]}")
             page.refresh()
             page.wait.load_start()
             time.sleep(3)
         except Exception as e:
-            print(f"❌ 尝试失败: {str(e)}")
+            print(f"❌ 意外错误: {str(e)}")
             if retry == max_retry:
-                page.get_screenshot(f'error_{time.time()}.png')
+                page.get_screenshot('final_error.png')
                 raise
 
     return False
 
 # ======================
-# 主流程（新增重试机制）
+# 主流程（优化重试机制）
 # ======================
 if __name__ == "__main__":
     browser = None
     try:
-        # 初始化浏览器（带重试）
+        # 带重试的浏览器初始化
         for i in range(3):
             try:
                 browser = get_browser(headless=True)
                 break
             except BrowserConnectError:
                 if i == 2: raise
-                print("🔄 浏览器连接失败，重试中...")
+                print("🔁 浏览器连接重试...")
                 time.sleep(5)
         
-        url = "https://www.serv00.com/offer/create_new_account"
-        print(f"🌐 正在访问 {url}")
-        browser.get(url, retry=3, interval=3, timeout=40)
+        target_url = "https://www.serv00.com/offer/create_new_account"
+        print(f"🌍 访问目标: {target_url}")
+        
+        # 强化页面加载
+        browser.get(target_url, retry=3, interval=2, timeout=60)
+        browser.wait.eles_loaded('body, .cf-turnstile, [data-sitekey]', timeout=40)
         
         if bypass_turnstile(browser):
-            print("\n🎉 成功获取Cookies:")
+            print("\n🎯 成功获取凭证:")
             cookies = browser.cookies(as_dict=True)
-            print(json.dumps(cookies, indent=2))
+            print(json.dumps(cookies, indent=2, ensure_ascii=False))
             
-            with open("cookies.json", 'w') as f:
-                json.dumps(cookies, f, ensure_ascii=False, indent=2)
+            with open("cookies.json", 'w', encoding='utf-8') as f:
+                json.dump(cookies, f, indent=2, ensure_ascii=False)
         else:
-            print("\n😞 验证失败")
+            print("\n⛔ 验证失败")
             
     except BrowserConnectError as e:
-        print(f"💥 连接错误: {str(e)}")
+        print(f"🔥 连接异常: {str(e)}")
     except Exception as e:
-        print(f"💣 致命错误: {str(e)}")
+        print(f"💥 崩溃错误: {str(e)}")
     finally:
         if browser:
-            # 清理资源
+            # 资源清理
             for d in getattr(browser, '_temp_dirs', []):
                 shutil.rmtree(d, ignore_errors=True)
             browser.quit()
-            print("\n🛑 浏览器已安全关闭")
+            print("\n🛑 浏览器终止")
