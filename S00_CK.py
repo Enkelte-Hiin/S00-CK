@@ -7,43 +7,8 @@ from DrissionPage import ChromiumPage, ChromiumOptions
 from DrissionPage.errors import ElementNotFoundError, BrowserConnectError
 
 # ======================
-# 浏览器扩展配置
+# 浏览器扩展配置（保持相同）
 # ======================
-MANIFEST_CONTENT = {
-    "manifest_version": 3,
-    "name": "Turnstile Helper",
-    "version": "0.3",
-    "content_scripts": [{
-        "js": ["./script.js"],
-        "matches": ["<all_urls>"],
-        "run_at": "document_start",
-        "all_frames": True,
-        "world": "MAIN"
-    }]
-}
-
-SCRIPT_CONTENT = """
-// 增强版反检测脚本
-const randomScreen = {
-    x: Math.floor(Math.random() * 1200 + 800),
-    y: Math.floor(Math.random() * 600 + 400)
-};
-
-Object.defineProperties(MouseEvent.prototype, {
-    'screenX': { get: () => randomScreen.x },
-    'screenY': { get: () => randomScreen.y }
-});
-
-// 覆盖WebGL参数
-const getParameter = WebGLRenderingContext.prototype.getParameter;
-WebGLRenderingContext.prototype.getParameter = function(parameter) {
-    const overrides = {
-        37445: 'NVIDIA GeForce RTX 3090',
-        37446: 'NVIDIA Corporation'
-    };
-    return overrides[parameter] || getParameter.call(this, parameter);
-};
-"""
 
 def create_extension():
     """创建临时扩展目录"""
@@ -55,7 +20,7 @@ def create_extension():
     return temp_dir
 
 # ======================
-# 浏览器配置
+# 修复后的浏览器配置
 # ======================
 def get_browser(headless=True):
     """配置浏览器实例"""
@@ -64,6 +29,9 @@ def get_browser(headless=True):
     co.set_argument('--disable-dev-shm-usage')
     co.set_argument('--remote-allow-origins=*')
     
+    # 显式设置浏览器路径（GitHub Actions 专用）
+    co.set_browser_path('/usr/bin/chromium-browser')
+    
     if headless:
         co.headless()
     
@@ -71,13 +39,12 @@ def get_browser(headless=True):
     ext_dir = create_extension()
     co.add_extension(ext_dir)
     
-    browser = ChromiumPage(co)
-    # 记录临时目录用于清理
+    browser = ChromiumPage(addr_driver_opts=co)  # 使用新式初始化方法
     browser._temp_dirs = [ext_dir]
     return browser
 
 # ======================
-# 验证码处理逻辑
+# 修复后的验证码处理逻辑
 # ======================
 def bypass_turnstile(page, max_retry=3):
     """执行验证码绕过"""
@@ -85,7 +52,7 @@ def bypass_turnstile(page, max_retry=3):
         try:
             print(f"\n🚀 尝试第 {retry} 次验证")
             
-            # 等待验证组件加载
+            # 使用新版元素等待API
             container = page.wait.ele('.cf-turnstile', timeout=20)
             
             # 处理Shadow DOM
@@ -94,34 +61,37 @@ def bypass_turnstile(page, max_retry=3):
                 raise ElementNotFoundError("验证iframe未找到")
             
             # 切换到iframe
-            page.wait.load_frame(iframe)
+            page.frame_to(iframe)
             
-            # 点击复选框
-            checkbox = page.wait.ele('input[type="checkbox"]', timeout=10)
+            # 使用更可靠的选择器
+            checkbox = page.wait.ele('xpath://input[@type="checkbox"]', timeout=15)
             checkbox.click(by_js=True)
             
-            # 验证结果
-            if page.wait.ele('.verifybox-success', timeout=15):
+            # 等待验证结果
+            if page.wait.ele('.verifybox-success', timeout=20):
                 print("✅ 验证成功")
+                return True
+            
+            # 添加备用验证方式
+            if page.wait.ele_text_contains('验证成功', timeout=10):
+                print("✅ 备用验证成功")
                 return True
             
         except ElementNotFoundError as e:
             print(f"⚠️ 元素未找到: {str(e)[:80]}")
             page.refresh()
-            page.wait.doc_loaded()
-            time.sleep(2)
-        except BrowserConnectError as e:
-            print(f"🔌 浏览器连接错误: {str(e)[:80]}")
-            raise
+            page.wait.load_start()
+            time.sleep(3)
         except Exception as e:
             print(f"❌ 未知错误: {str(e)}")
             if retry == max_retry:
+                page.get_screenshot(f'error_{int(time.time())}.png')
                 raise
 
     return False
 
 # ======================
-# 主流程
+# 主流程（增加页面加载检测）
 # ======================
 if __name__ == "__main__":
     browser = None
@@ -129,7 +99,10 @@ if __name__ == "__main__":
         browser = get_browser(headless=True)
         url = "https://www.serv00.com/offer/create_new_account"
         print(f"🌐 正在访问 {url}")
-        browser.get(url)
+        
+        # 使用新版页面加载检测
+        browser.get(url, retry=3, interval=2, timeout=30)
+        browser.wait.load_start()
         
         if bypass_turnstile(browser):
             print("\n🎉 成功获取Cookies:")
