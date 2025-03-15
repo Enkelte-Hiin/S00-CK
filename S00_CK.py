@@ -7,12 +7,12 @@ from DrissionPage import ChromiumPage, ChromiumOptions
 from DrissionPage.errors import ElementNotFoundError, BrowserConnectError
 
 # ======================
-# 扩展配置（优化版）
+# 扩展配置（兼容旧版）
 # ======================
 MANIFEST_CONTENT = {
     "manifest_version": 3,
-    "name": "CF Bypass Expert",
-    "version": "3.0",
+    "name": "Turnstile Solver",
+    "version": "1.0",
     "content_scripts": [{
         "js": ["content.js"],
         "matches": ["<all_urls>"],
@@ -23,28 +23,25 @@ MANIFEST_CONTENT = {
 }
 
 SCRIPT_CONTENT = """
-// 强化浏览器指纹保护
+// 基本反检测措施
 Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-Object.defineProperty(navigator, 'languages', { get: () => ['zh-CN', 'zh', 'en'] });
-
-const randomVal = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const random = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 Object.defineProperties(MouseEvent.prototype, {
-    'screenX': { get: () => randomVal(800, 2000) },
-    'screenY': { get: () => randomVal(400, 1200) }
+    'screenX': { value: random(800, 2000) },
+    'screenY': { value: random(400, 1200) }
 });
 """
 
 # ======================
-# 浏览器初始化（兼容旧版API）
+# 浏览器初始化（兼容4.1.x）
 # ======================
 def create_extension():
     """创建临时扩展目录"""
     temp_dir = tempfile.mkdtemp(prefix='cf_ext_')
     with open(os.path.join(temp_dir, 'manifest.json'), 'w') as f:
-        json.dump(MANIFEST_CONTENT, f, indent=2)
+        json.dump(MANIFEST_CONTENT, f)
     with open(os.path.join(temp_dir, 'content.js'), 'w') as f:
-        f.write(SCRIPT_CONTENT.strip())
+        f.write(SCRIPT_CONTENT)
     return temp_dir
 
 def get_browser(headless=True):
@@ -52,10 +49,7 @@ def get_browser(headless=True):
     co = ChromiumOptions()
     co.set_argument('--no-sandbox')
     co.set_argument('--disable-dev-shm-usage')
-    co.set_argument('--disable-blink-features=AutomationControlled')
-    co.set_argument('--remote-allow-origins=*')
-    co.set_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-    co.set_argument('--window-size=1920,1080')
+    co.set_argument('--disable-gpu')
     
     if headless:
         co.headless()
@@ -64,8 +58,8 @@ def get_browser(headless=True):
     co.add_extension(ext_dir)
     
     try:
-        # 使用更兼容的初始化方式
-        browser = ChromiumPage(addr_or_opts=co, timeout=60)
+        # 使用旧版初始化方式
+        browser = ChromiumPage(addr_or_opts=co, timeout=30)
         browser._temp_dirs = [ext_dir]
         return browser
     except Exception as e:
@@ -73,118 +67,78 @@ def get_browser(headless=True):
         raise
 
 # ======================
-# 验证码处理逻辑（优化定位策略）
+# 验证码处理（兼容旧版API）
 # ======================
 def bypass_turnstile(page, max_retry=3):
     """验证码处理流程"""
     for retry in range(1, max_retry+1):
         try:
-            print(f"\n🔄 第 {retry} 次尝试")
+            print(f"\n尝试第 {retry} 次")
             
-            # 智能等待页面核心元素
-            page.wait.ele('css:body', timeout=60)
+            # 基础元素定位方式
+            container = page.ele('.cf-turnstile', timeout=30)
+            if not container:
+                raise ElementNotFoundError("验证容器未找到")
             
-            # 使用混合定位策略
-            container = page.wait.ele(
-                'css:div[data-sitekey], css:.cf-turnstile, css:iframe[src*="challenges.cloudflare.com"]', 
-                timeout=40
-            )
-            
-            # 处理iframe嵌套
-            iframe = container.run_js('''
-                let iframe = arguments[0].shadowRoot?.querySelector('iframe');
-                if (!iframe) iframe = arguments[0].querySelector('iframe');
-                return iframe || document.querySelector('iframe[src*="turnstile"]');
-            ''', container)
-            
+            # 查找iframe
+            iframe = container.run_js('return arguments[0].querySelector("iframe")', container)
             if not iframe:
-                page.get_screenshot(f'iframe_error_{retry}.png')
-                raise ElementNotFoundError("验证框架未找到")
+                raise ElementNotFoundError("iframe未找到")
             
             # 切换到iframe
             page.switch_to.frame(iframe)
             
-            # 定位并点击验证框
-            checkbox = page.wait.ele(
-                'css:input[type="checkbox"], css:.mark, css:.checkbox-label', 
-                timeout=30
-            )
-            checkbox.click(by_js=True)  # 使用JS点击更可靠
+            # 定位复选框
+            checkbox = page.ele('input[type="checkbox"]', timeout=20)
+            checkbox.click()
             
-            # 验证成功条件
-            success = page.wait.ele(
-                'css:.verifybox-success, css:[data-success], css:.success-mark', 
-                timeout=25
-            )
-            
+            # 验证结果
+            success = page.ele('.verifybox-success', timeout=15)
             if success:
-                print("✅ 验证成功")
+                print("验证成功")
                 return True
             
-            # 触发页面更新
             page.refresh()
-            time.sleep(5)
+            time.sleep(3)
             
         except ElementNotFoundError as e:
-            print(f"⚠️ 元素未找到: {str(e)[:50]}")
+            print(f"元素未找到: {str(e)[:50]}")
             page.get_screenshot(f'error_{retry}.png')
             page.refresh()
-            time.sleep(8)
+            time.sleep(5)
         except Exception as e:
-            print(f"❌ 异常错误: {str(e)}")
+            print(f"发生错误: {str(e)}")
             if retry == max_retry:
-                page.get_screenshot('final_error.png')
                 raise
 
     return False
 
 # ======================
-# 主流程（增强稳定性）
+# 主流程
 # ======================
 if __name__ == "__main__":
     browser = None
     try:
-        # 带指数退避的重试机制
-        retry_delays = [5, 10, 15]
-        for attempt in range(3):
-            try:
-                browser = get_browser(headless=True)
-                break
-            except BrowserConnectError as e:
-                if attempt == 2: 
-                    raise
-                delay = retry_delays[attempt]
-                print(f"🔁 浏览器连接失败，{delay}秒后重试...")
-                time.sleep(delay)
-        
-        target_url = "https://www.serv00.com/offer/create_new_account"
-        print(f"🌐 正在访问 {target_url}")
-        
-        # 带重试的页面加载
-        browser.get(target_url, retry=3, interval=5, timeout=60)
+        browser = get_browser(headless=True)
+        print("正在访问目标网站...")
+        browser.get('https://www.serv00.com/offer/create_new_account')
         
         if bypass_turnstile(browser):
-            print("\n🎉 成功获取Cookies:")
-            cookies = browser.cookies(as_dict=True)
-            print(json.dumps(cookies, indent=2, ensure_ascii=False))
+            print("\n成功获取Cookies:")
+            cookies = browser.get_cookies()
+            print(json.dumps(cookies, indent=2))
             
-            # 保存Cookies并验证有效性
-            with open("cookies.json", 'w', encoding='utf-8') as f:
-                json.dump(cookies, f, indent=2, ensure_ascii=False)
-            
-            if browser.title != 'Just a moment...':
-                print("✅ 验证流程完整通过")
-            else:
-                print("⚠️ 验证状态可能异常")
+            with open("cookies.json", 'w') as f:
+                json.dump(cookies, f, indent=2)
         else:
-            print("\n❌ 验证流程失败")
+            print("\n验证失败")
             
     except Exception as e:
-        print(f"💥 致命错误: {str(e)}")
+        print(f"程序出错: {str(e)}")
     finally:
         if browser:
             # 清理临时文件
             for d in getattr(browser, '_temp_dirs', []):
                 shutil.rmtree(d, ignore_errors=True)
             browser.quit()
-            print("\n🛑 浏览器已安全关闭")
+            print("浏览器已关闭")
