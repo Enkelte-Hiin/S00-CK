@@ -87,15 +87,17 @@ def get_patched_browser(headless=True):
 # ======================
 def click_turnstile_checkbox(page, max_retry=3):
     """执行验证流程"""
-    for retry in range(1, max_retry+1):
+    for retry in range(1, max_retry + 1):
         try:
             print(f"\n🔄 第 {retry} 次尝试")
             
-            # 等待核心元素加载（混合定位策略）
-            container = page.wait.ele(
-                'css:div[data-sitekey], css:.cf-turnstile, css:iframe[src*="challenges.cloudflare.com"]', 
+            # 等待核心元素加载（使用 wait_for_selector）
+            container = page.wait_for_selector(
+                'css:div[data-sitekey], css:.cf-turnstile, css:iframe[src*="challenges.cloudflare.com"]',
                 timeout=40
             )
+            if not container:
+                raise ElementNotFoundError("未找到验证码容器")
             
             # 穿透Shadow DOM查找iframe
             iframe = container.run_js('''
@@ -114,30 +116,33 @@ def click_turnstile_checkbox(page, max_retry=3):
             # 切换到iframe上下文
             page.switch_to.frame(iframe)
             
-            # 定位并点击验证框（复合选择器）
-            checkbox = page.wait.ele(
-                'css:input[type="checkbox"], css:.checkbox-label, css:.mark', 
+            # 定位并点击验证框
+            checkbox = page.wait_for_selector(
+                'css:input[type="checkbox"], css:.checkbox-label, css:.mark',
                 timeout=30
             )
-            checkbox.click(by_js=True)  # 使用JS点击更可靠
+            if checkbox:
+                checkbox.click(by_js=True)  # 使用JS点击更可靠
+            else:
+                raise ElementNotFoundError("未找到复选框")
             
             # 多维度验证结果
             success = any([
-                page.wait.ele('.verifybox-success', timeout=20),
-                page.wait.ele_text_contains('验证成功', timeout=15),
-                page.wait.ele_text_contains('success', timeout=15)
+                page.ele('.verifybox-success', timeout=20, raise_err=False),
+                page.ele('text=验证成功', timeout=15, raise_err=False),
+                page.ele('text=success', timeout=15, raise_err=False)
             ])
             
             if success:
                 print("✅ 验证成功")
                 return True
-            
-            # 触发页面刷新
-            page.refresh()
-            time.sleep(5)
+            else:
+                print("⚠️ 未检测到成功标志，刷新重试")
+                page.refresh()
+                time.sleep(5)
             
         except ElementNotFoundError as e:
-            print(f"⚠️ 元素未找到: {str(e)[:50]}")
+            print(f"⚠️ 元素未找到: {str(e)}")
             page.get_screenshot(f'error_{retry}.png')
             page.refresh()
             time.sleep(8)
@@ -147,6 +152,7 @@ def click_turnstile_checkbox(page, max_retry=3):
                 page.get_screenshot('final_error.png')
                 raise
 
+    print("❌ 所有尝试均失败")
     return False
 
 # ======================
