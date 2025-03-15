@@ -20,7 +20,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --upgrade DrissionPage==4.3.1
+          pip install --upgrade DrissionPage
 
       - name: Install Chromium
         run: |
