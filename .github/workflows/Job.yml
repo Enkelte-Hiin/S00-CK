@@ -15,7 +15,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.11'  # 保持与日志中的版本一致
 
       - name: Install DrissionPage
         run: |
@@ -23,11 +23,18 @@ jobs:
           pip install DrissionPage
 
       - name: Check Microsoft Edge installation
+        shell: pwsh
         run: |
-          where msedge
-          if ($LASTEXITCODE -eq 0) { Write-Output "Microsoft Edge 已安装" } else { Write-Output "未找到 Microsoft Edge" }
+          $edgePath = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+          if (Test-Path $edgePath) {
+            Write-Output "Microsoft Edge found at: $edgePath"
+          } else {
+            Write-Output "Microsoft Edge not found at default path"
+            exit 1
+          }
 
       - name: Run script
+        shell: pwsh
         run: |
           python S00_CK.py
 
