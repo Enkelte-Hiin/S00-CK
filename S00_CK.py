@@ -1,190 +1,89 @@
+from DrissionPage import Chromium, ChromiumOptions
+import time
 import os
 import tempfile
-import json
 import shutil
-import time
-from DrissionPage import ChromiumPage, ChromiumOptions
-from DrissionPage.errors import ElementNotFoundError
+import json
 
-# ======================
-# 扩展配置（增强反检测）
-# ======================
-MANIFEST_CONTENT = {
-    "manifest_version": 3,
-    "name": "Turnstile Expert",
-    "version": "2.0",
-    "content_scripts": [{
-        "js": ["content.js"],
-        "matches": ["<all_urls>"],
-        "run_at": "document_start",
-        "all_frames": True,
-        "world": "MAIN"
-    }]
-}
-
-SCRIPT_CONTENT = """
-// 强化浏览器指纹保护
-Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-const getRandom = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-
-// 覆盖鼠标参数
-Object.defineProperties(MouseEvent.prototype, {
-    'screenX': { value: getRandom(800, 2000) },
-    'screenY': { value: getRandom(400, 1200) }
-});
-
-// 修改WebGL渲染器
-const origGetParameter = WebGLRenderingContext.prototype.getParameter;
-WebGLRenderingContext.prototype.getParameter = function(param) {
-    const overrides = {
-        37445: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4090 Direct3D11 vs_5_0 ps_5_0)',
-        37446: 'NVIDIA Corporation'
-    };
-    return overrides[param] || origGetParameter.call(this, param);
-};
-"""
-
-# ======================
-# 浏览器初始化
-# ======================
-def create_extension():
-    """创建临时扩展目录"""
-    temp_dir = tempfile.mkdtemp(prefix='cf_ext_')
-    with open(os.path.join(temp_dir, 'manifest.json'), 'w') as f:
-        json.dump(MANIFEST_CONTENT, f, indent=2)
-    with open(os.path.join(temp_dir, 'content.js'), 'w') as f:
-        f.write(SCRIPT_CONTENT.strip())
-    return temp_dir
-
-def get_patched_browser(headless=True):
-    """配置浏览器实例"""
-    co = ChromiumOptions()
-    co.set_argument('--no-sandbox')
-    co.set_argument('--disable-dev-shm-usage')
-    co.set_argument('--disable-blink-features=AutomationControlled')
-    
-    # 设置真实用户代理
-    user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    co.set_argument(f'--user-agent={user_agent}')
-    
-    if headless:
-        co.headless()
-
-    # 加载扩展
-    ext_dir = create_extension()
-    co.add_extension(ext_dir)
-    
+# 定义函数来关闭所有 Microsoft Edge 进程
+def close_existing_browsers():
     try:
-        browser = ChromiumPage(addr_or_opts=co, timeout=60)
-        browser._temp_dirs = [ext_dir]
-        return browser
+        os.system("taskkill /f /im msedge.exe")
+        print("已关闭所有现有的 Edge 浏览器进程")
     except Exception as e:
-        shutil.rmtree(ext_dir, ignore_errors=True)
-        raise
+        print(f"关闭浏览器进程时出错：{e}")
+    time.sleep(1)
 
-# ======================
-# 验证码处理核心逻辑
-# ======================
-def click_turnstile_checkbox(page, max_retry=3):
-    """执行验证流程"""
-    for retry in range(1, max_retry + 1):
-        try:
-            print(f"\n🔄 第 {retry} 次尝试")
-            
-            # 等待核心元素加载（使用 wait_for_selector）
-            container = page.wait_for_selector(
-                'css:div[data-sitekey], css:.cf-turnstile, css:iframe[src*="challenges.cloudflare.com"]',
-                timeout=40
-            )
-            if not container:
-                raise ElementNotFoundError("未找到验证码容器")
-            
-            # 穿透Shadow DOM查找iframe
-            iframe = container.run_js('''
-                function findIframe(element) {
-                    return element.shadowRoot?.querySelector('iframe') 
-                        || element.querySelector('iframe')
-                        || document.querySelector('iframe[src*="turnstile"]');
-                }
-                return findIframe(arguments[0]);
-            ''', container)
-            
-            if not iframe:
-                page.get_screenshot(f'iframe_error_{retry}.png')
-                raise ElementNotFoundError("验证框架未找到")
+# 设置 Microsoft Edge 浏览器的路径
+edge_path = r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
 
-            # 切换到iframe上下文
-            page.switch_to.frame(iframe)
-            
-            # 定位并点击验证框
-            checkbox = page.wait_for_selector(
-                'css:input[type="checkbox"], css:.checkbox-label, css:.mark',
-                timeout=30
-            )
-            if checkbox:
-                checkbox.click(by_js=True)  # 使用JS点击更可靠
-            else:
-                raise ElementNotFoundError("未找到复选框")
-            
-            # 多维度验证结果
-            success = any([
-                page.ele('.verifybox-success', timeout=20, raise_err=False),
-                page.ele('text=验证成功', timeout=15, raise_err=False),
-                page.ele('text=success', timeout=15, raise_err=False)
-            ])
-            
-            if success:
-                print("✅ 验证成功")
-                return True
-            else:
-                print("⚠️ 未检测到成功标志，刷新重试")
-                page.refresh()
-                time.sleep(5)
-            
-        except ElementNotFoundError as e:
-            print(f"⚠️ 元素未找到: {str(e)}")
-            page.get_screenshot(f'error_{retry}.png')
-            page.refresh()
-            time.sleep(8)
-        except Exception as e:
-            print(f"❌ 发生异常: {str(e)}")
-            if retry == max_retry:
-                page.get_screenshot('final_error.png')
-                raise
+# 在脚本运行前关闭现有浏览器
+close_existing_browsers()
 
-    print("❌ 所有尝试均失败")
-    return False
+# 创建临时用户数据目录
+temp_dir = tempfile.mkdtemp()
+print(f"使用临时用户数据目录：{temp_dir}")
 
-# ======================
-# 主流程
-# ======================
-if __name__ == "__main__":
-    browser = None
-    try:
-        browser = get_patched_browser(headless=True)
-        target_url = "https://www.serv00.com/offer/create_new_account"
-        print(f"🌐 正在访问 {target_url}")
-        
-        # 带重试的页面加载
-        browser.get(target_url, retry=3, interval=5, timeout=60)
-        browser.wait.load_start()
-        
-        if click_turnstile_checkbox(browser):
-            print("\n🎉 成功获取Cookies:")
-            cookies = browser.cookies(as_dict=True)
-            print(json.dumps(cookies, indent=2, ensure_ascii=False))
-            
-            with open("cookies.json", 'w', encoding='utf-8') as f:
-                json.dump(cookies, f, indent=2, ensure_ascii=False)
-        else:
-            print("\n❌ 验证失败")
-            
-    except Exception as e:
-        print(f"💥 致命错误: {str(e)}")
-    finally:
-        if browser:
-            # 清理临时文件
-            for d in getattr(browser, '_temp_dirs', []):
-                shutil.rmtree(d, ignore_errors=True)
-            browser.quit()
-            print("\n🛑 浏览器已安全关闭")
+# 配置浏览器选项
+options = ChromiumOptions()
+options.set_paths(browser_path=edge_path)
+options.set_argument("--window-size=1024,768")
+options.set_argument("--window-position=0,0")
+options.set_argument("--incognito")
+options.set_argument(f"--user-data-dir={temp_dir}")
+# 可选：尝试无头模式以适配 GitHub Actions
+# options.set_argument("--headless")
+
+# 启动浏览器
+try:
+    browser = Chromium(options)
+    tab = browser.latest_tab
+    print("成功连接到 Edge 浏览器（无痕模式 + 新用户数据目录）！")
+except Exception as e:
+    print(f"连接失败：{e}")
+    shutil.rmtree(temp_dir, ignore_errors=True)
+    exit()
+
+# 导航到目标网站
+tab.get("https://www.serv00.com/offer/create_new_account")
+
+# 等待页面加载
+tab.wait(10)
+
+# 定时点击以绕过 Cloudflare 验证码
+max_attempts = 20
+attempt = 0
+
+while attempt < max_attempts:
+    tab.actions.move_to((64, 290)).click()
+    print(f"第 {attempt + 1} 次点击，位置：(64, 290)")
+    time.sleep(5)
+    title = tab.title.lower()
+    if "serv00.com" in title:
+        print("网站标题包含 'serv00.com'，验证码已通过")
+        break
+    elif "just a" in title:
+        print("网站标题包含 'just a'，仍在验证中")
+    else:
+        print("网站标题未匹配，继续尝试")
+    attempt += 1
+
+# 获取 Cookie 并保存到文件
+if attempt < max_attempts:
+    cookies = tab.cookies()
+    cf_clearance = next((cookie for cookie in cookies if cookie['name'] == 'cf_clearance'), None)
+    if cf_clearance:
+        print("获取到的 cf_clearance Cookie：", cf_clearance)
+        # 保存到文件
+        with open("cf_clearance.json", "w") as f:
+            json.dump({"cf_clearance": cf_clearance['value']}, f)
+        print("已将 cf_clearance 保存到 cf_clearance.json")
+    else:
+        print("未找到 cf_clearance Cookie")
+else:
+    print("达到最大尝试次数，未能通过验证码")
+
+# 关闭浏览器并清理临时目录
+browser.quit()
+shutil.rmtree(temp_dir, ignore_errors=True)
+print("已清理临时用户数据目录")
