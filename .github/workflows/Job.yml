@@ -15,16 +15,17 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.9'
+          python-version: '3.11'
 
       - name: Install DrissionPage
         run: |
           python -m pip install --upgrade pip
           pip install DrissionPage
 
-      - name: Install Microsoft Edge
+      - name: Check Microsoft Edge installation
         run: |
-          winget install --id Microsoft.Edge --source winget --silent
+          where msedge
+          if ($LASTEXITCODE -eq 0) { Write-Output "Microsoft Edge 已安装" } else { Write-Output "未找到 Microsoft Edge" }
 
       - name: Run script
         run: |
