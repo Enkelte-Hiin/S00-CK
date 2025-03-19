@@ -4,10 +4,6 @@ import os
 import tempfile
 import shutil
 import json
-import sys
-
-# 设置 UTF-8 编码以支持中文（可选）
-sys.stdout.reconfigure(encoding='utf-8')
 
 def close_existing_browsers():
     try:
@@ -64,21 +60,10 @@ max_attempts = 20
 attempt = 0
 while attempt < max_attempts:
     try:
-        iframe = tab.get_frame('@src:contains("challenges.cloudflare.com")')
-        if iframe:
-            checkbox = iframe.ele('@class:ctp-checkbox-label')
-            if checkbox:
-                checkbox.click()
-                print(f"Attempt {attempt + 1}: Clicked checkbox via element locator")
-            else:
-                print(f"Attempt {attempt + 1}: Checkbox not found, falling back to coordinates")
-                tab.actions.move_to((64, 290)).click()
-        else:
-            print(f"Attempt {attempt + 1}: iframe not found, falling back to coordinates")
-            tab.actions.move_to((64, 290)).click()
-    except Exception as e:
-        print(f"Click failed: {e}")
         tab.actions.move_to((64, 290)).click()
+        print(f"Attempt {attempt + 1}: Clicked at coordinates (64, 290)")
+    except Exception as e:
+        print(f"Click failed at attempt {attempt + 1}: {e}")
 
     time.sleep(5)
     title = tab.title.lower()
