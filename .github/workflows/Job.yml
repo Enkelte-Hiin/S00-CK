@@ -15,7 +15,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'  # 保持与日志中的版本一致
+          python-version: '3.11'  # 与日志保持一致
 
       - name: Install DrissionPage
         run: |
